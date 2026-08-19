@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+
 import { logout } from "@/app/auth/actions";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function PortfolioPage() {
   const supabase = await createClient();
@@ -33,14 +35,23 @@ export default async function PortfolioPage() {
             </p>
           </div>
 
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-md border bg-white px-4 py-2 text-sm"
+          <div className="flex items-center gap-3">
+            <Link
+              href="/relationships/new"
+              className="rounded-md bg-black px-4 py-2 text-sm text-white"
             >
-              Sign out
-            </button>
-          </form>
+              New relationship
+            </Link>
+
+            <form action={logout}>
+              <button
+                type="submit"
+                className="rounded-md border bg-white px-4 py-2 text-sm"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
         </div>
 
         <div className="mt-8">
@@ -55,9 +66,10 @@ export default async function PortfolioPage() {
           ) : (
             <div className="mt-4 grid gap-4">
               {relationships.map((relationship) => (
-                <div
+                <Link
                   key={relationship.id}
-                  className="rounded-xl border bg-white p-6"
+                  href={`/relationships/${relationship.id}`}
+                  className="block rounded-xl border bg-white p-6 transition hover:shadow-sm"
                 >
                   <h3 className="text-lg font-semibold">
                     {relationship.name}
@@ -67,7 +79,7 @@ export default async function PortfolioPage() {
                     {relationship.industry || "No industry"} ·{" "}
                     {relationship.region || "No region"}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
           )}
