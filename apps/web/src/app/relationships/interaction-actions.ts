@@ -95,6 +95,14 @@ export async function createInteraction(formData: FormData) {
     );
   }
 
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    redirect("/auth/login");
+  }
+
   const apiBaseUrl = process.env.API_BASE_URL;
 
   if (!apiBaseUrl) {
@@ -115,6 +123,7 @@ export async function createInteraction(formData: FormData) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         customer_text: rawText,

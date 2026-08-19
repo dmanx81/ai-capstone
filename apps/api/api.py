@@ -1,7 +1,25 @@
-from fastapi import FastAPI
+import os
+from typing import Optional
+
+import jwt
+from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 from pydantic import BaseModel
 
 from apps.api.analyzer import analyze_account
+
+
+SUPABASE_URL = os.getenv(
+    "SUPABASE_URL",
+    "https://gmyrbxeyzkeinvwrdjip.supabase.co",
+)
+
+SUPABASE_ISSUER = f"{SUPABASE_URL}/auth/v1"
+SUPABASE_JWKS_URL = f"{SUPABASE_ISSUER}/.well-known/jwks.json"
+
+security = HTTPBearer(auto_error=False)
+jwks_client = PyJWKClient(SUPABASE_JWKS_URL)
 
 
 app = FastAPI(
@@ -14,6 +32,46 @@ class AnalyzeRequest(BaseModel):
     customer_text: str
 
 
+def verify_supabase_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication token",
+        )
+
+    token = credentials.credentials
+
+    try:
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256"],
+            audience="authenticated",
+            issuer=SUPABASE_ISSUER,
+        )
+
+        if payload.get("role") != "authenticated":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication role",
+            )
+
+        return payload
+
+    except HTTPException:
+        raise
+
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired authentication token",
+        )
+
+
 @app.get("/health")
 def health():
     return {
@@ -22,7 +80,10 @@ def health():
 
 
 @app.post("/analyze")
-def analyze(request: AnalyzeRequest):
+def analyze(
+    request: AnalyzeRequest,
+    claims: dict = Depends(verify_supabase_token),
+):
     brief = analyze_account(
         request.customer_text
     )
