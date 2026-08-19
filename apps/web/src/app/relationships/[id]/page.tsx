@@ -6,6 +6,7 @@ import {
   deleteRelationship,
   updateRelationship,
 } from "../actions";
+import { createInteraction } from "../interaction-actions";
 
 type RelationshipPageProps = {
   params: Promise<{
@@ -14,6 +15,29 @@ type RelationshipPageProps = {
   searchParams: Promise<{
     error?: string;
   }>;
+};
+
+type BriefContent = {
+  executive_summary: string;
+  risks: Array<{
+    title: string;
+    severity: string;
+    evidence: string;
+    confidence: number;
+  }>;
+  opportunities: Array<{
+    title: string;
+    evidence: string;
+    recommended_action: string;
+  }>;
+  action_items: Array<{
+    action: string;
+    owner: string | null;
+    deadline: string | null;
+    evidence: string;
+  }>;
+  next_steps: string[];
+  follow_up_email: string;
 };
 
 export default async function RelationshipPage({
@@ -47,9 +71,70 @@ export default async function RelationshipPage({
     notFound();
   }
 
+  const { data: interactions, error: interactionsError } = await supabase
+    .from("interactions")
+    .select("id, type, raw_text, occurred_at, created_at")
+    .eq("account_id", id)
+    .order("occurred_at", { ascending: false });
+
+  if (interactionsError) {
+    throw new Error(
+      `Failed to load interactions: ${interactionsError.message}`
+    );
+  }
+
+  const { data: latestBrief, error: briefError } = await supabase
+    .from("briefs")
+    .select("id, content_json, health_score, model_used, created_at")
+    .eq("account_id", id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (briefError) {
+    throw new Error(`Failed to load latest brief: ${briefError.message}`);
+  }
+
+  let extractedItems:
+    | Array<{
+        id: string;
+        kind: string;
+        title: string;
+        detail: string | null;
+        status: string;
+      }>
+    | null = null;
+
+  if (latestBrief) {
+    const { data, error: itemsError } = await supabase
+      .from("extracted_items")
+      .select("id, kind, title, detail, status")
+      .eq("brief_id", latestBrief.id)
+      .order("created_at", { ascending: true });
+
+    if (itemsError) {
+      throw new Error(
+        `Failed to load extracted items: ${itemsError.message}`
+      );
+    }
+
+    extractedItems = data;
+  }
+
+  const briefContent = latestBrief?.content_json as BriefContent | undefined;
+
+  const risks =
+    extractedItems?.filter((item) => item.kind === "risk") ?? [];
+
+  const opportunities =
+    extractedItems?.filter((item) => item.kind === "opportunity") ?? [];
+
+  const actions =
+    extractedItems?.filter((item) => item.kind === "action") ?? [];
+
   return (
     <main className="min-h-screen bg-gray-50 p-8">
-      <div className="mx-auto max-w-4xl">
+      <div className="mx-auto max-w-5xl">
         <Link
           href="/portfolio"
           className="text-sm font-medium text-gray-600 underline"
@@ -69,11 +154,7 @@ export default async function RelationshipPage({
           )}
 
           <form action={updateRelationship} className="mt-8 space-y-5">
-            <input
-              type="hidden"
-              name="id"
-              value={relationship.id}
-            />
+            <input type="hidden" name="id" value={relationship.id} />
 
             <div>
               <label
@@ -151,31 +232,284 @@ export default async function RelationshipPage({
               Save changes
             </button>
           </form>
+        </div>
 
-          <div className="mt-10 border-t pt-6">
-            <h2 className="font-medium text-red-700">
-              Danger zone
-            </h2>
+        <div className="mt-6 rounded-xl border bg-white p-8">
+          <h2 className="text-2xl font-semibold">
+            Latest AI brief
+          </h2>
 
-            <p className="mt-1 text-sm text-gray-600">
-              Deleting this relationship will also delete its child data.
+          {!latestBrief || !briefContent ? (
+            <p className="mt-4 text-gray-600">
+              No AI brief yet. Add an interaction to generate one.
             </p>
+          ) : (
+            <div className="mt-6 space-y-8">
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Executive summary
+                </h3>
 
-            <form action={deleteRelationship} className="mt-4">
-              <input
-                type="hidden"
-                name="id"
-                value={relationship.id}
-              />
+                <p className="mt-2 whitespace-pre-wrap text-gray-700">
+                  {briefContent.executive_summary}
+                </p>
+              </section>
 
-              <button
-                type="submit"
-                className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm text-red-700"
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Risks
+                </h3>
+
+                {risks.length === 0 ? (
+                  <p className="mt-2 text-gray-600">
+                    No risks identified.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {risks.map((risk) => (
+                      <div
+                        key={risk.id}
+                        className="rounded-lg border p-4"
+                      >
+                        <p className="font-medium">
+                          {risk.title}
+                        </p>
+
+                        {risk.detail && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">
+                            {risk.detail}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Opportunities
+                </h3>
+
+                {opportunities.length === 0 ? (
+                  <p className="mt-2 text-gray-600">
+                    No opportunities identified.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {opportunities.map((opportunity) => (
+                      <div
+                        key={opportunity.id}
+                        className="rounded-lg border p-4"
+                      >
+                        <p className="font-medium">
+                          {opportunity.title}
+                        </p>
+
+                        {opportunity.detail && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">
+                            {opportunity.detail}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Action items
+                </h3>
+
+                {actions.length === 0 ? (
+                  <p className="mt-2 text-gray-600">
+                    No action items identified.
+                  </p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {actions.map((action) => (
+                      <div
+                        key={action.id}
+                        className="rounded-lg border p-4"
+                      >
+                        <p className="font-medium">
+                          {action.title}
+                        </p>
+
+                        {action.detail && (
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">
+                            {action.detail}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Next steps
+                </h3>
+
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-gray-700">
+                  {briefContent.next_steps.map((step) => (
+                    <li key={step}>
+                      {step}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section>
+                <h3 className="text-lg font-semibold">
+                  Draft follow-up email
+                </h3>
+
+                <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-gray-50 p-4 text-sm text-gray-700">
+                  {briefContent.follow_up_email}
+                </pre>
+              </section>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 rounded-xl border bg-white p-8">
+          <h2 className="text-2xl font-semibold">
+            Add interaction
+          </h2>
+
+          <form action={createInteraction} className="mt-6 space-y-5">
+            <input
+              type="hidden"
+              name="account_id"
+              value={relationship.id}
+            />
+
+            <div>
+              <label
+                htmlFor="type"
+                className="mb-1 block text-sm font-medium"
               >
-                Delete relationship
-              </button>
-            </form>
-          </div>
+                Type
+              </label>
+
+              <select
+                id="type"
+                name="type"
+                required
+                className="w-full rounded-md border px-3 py-2"
+              >
+                <option value="meeting">Meeting</option>
+                <option value="email">Email</option>
+                <option value="note">Note</option>
+                <option value="transcript">Transcript</option>
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="occurred_at"
+                className="mb-1 block text-sm font-medium"
+              >
+                Date and time
+              </label>
+
+              <input
+                id="occurred_at"
+                name="occurred_at"
+                type="datetime-local"
+                required
+                className="w-full rounded-md border px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="raw_text"
+                className="mb-1 block text-sm font-medium"
+              >
+                Interaction text
+              </label>
+
+              <textarea
+                id="raw_text"
+                name="raw_text"
+                required
+                rows={8}
+                className="w-full rounded-md border px-3 py-2"
+                placeholder="Paste meeting notes, an email, transcript, or other relationship context..."
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="rounded-md bg-black px-4 py-2 text-white"
+            >
+              Add interaction
+            </button>
+          </form>
+        </div>
+
+        <div className="mt-6 rounded-xl border bg-white p-8">
+          <h2 className="text-2xl font-semibold">
+            Interaction history
+          </h2>
+
+          {!interactions || interactions.length === 0 ? (
+            <p className="mt-4 text-gray-600">
+              No interactions yet.
+            </p>
+          ) : (
+            <div className="mt-6 space-y-4">
+              {interactions.map((interaction) => (
+                <div
+                  key={interaction.id}
+                  className="rounded-lg border p-5"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium capitalize">
+                      {interaction.type}
+                    </span>
+
+                    <time className="text-sm text-gray-500">
+                      {new Date(interaction.occurred_at).toLocaleString()}
+                    </time>
+                  </div>
+
+                  <p className="mt-3 whitespace-pre-wrap text-sm text-gray-700">
+                    {interaction.raw_text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 rounded-xl border bg-white p-8">
+          <h2 className="font-medium text-red-700">
+            Danger zone
+          </h2>
+
+          <p className="mt-1 text-sm text-gray-600">
+            Deleting this relationship will also delete its child data.
+          </p>
+
+          <form action={deleteRelationship} className="mt-4">
+            <input
+              type="hidden"
+              name="id"
+              value={relationship.id}
+            />
+
+            <button
+              type="submit"
+              className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm text-red-700"
+            >
+              Delete relationship
+            </button>
+          </form>
         </div>
       </div>
     </main>
