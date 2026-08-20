@@ -44,40 +44,6 @@ def verify_supabase_token(
     token = credentials.credentials
 
     try:
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
-
-        payload = jwt.decode(
-            token,
-            signing_key.key,
-            algorithms=["ES256"],
-            audience="authenticated",
-            issuer=SUPABASE_ISSUER,
-        )
-
-        if payload.get("role") != "authenticated":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication role",
-            )
-
-        return payload
-
-    except HTTPException:
-        raise
-
-    def verify_supabase_token(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-):
-    if credentials is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authentication token",
-        )
-
-    token = credentials.credentials
-
-    try:
-        # Debug only: inspect safe JWT metadata, never print the raw token.
         header = jwt.get_unverified_header(token)
 
         claims = jwt.decode(
