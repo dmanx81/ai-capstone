@@ -132,8 +132,12 @@ export async function createInteraction(formData: FormData) {
     });
 
     if (!response.ok) {
-      throw new Error(`Analysis API returned ${response.status}`);
-    }
+  const errorBody = await response.text();
+
+  throw new Error(
+    `Analysis API returned ${response.status}: ${errorBody}`
+  );
+}
 
     brief = (await response.json()) as AccountBrief;
   } catch (error) {
