@@ -1,0 +1,12 @@
+{
+  "name": "@ai-capstone/shared",
+  "version": "0.1.0",
+  "private": true,
+  "types": "src/generated/account-brief.ts",
+  "exports": {
+    ".": {
+      "types": "./src/generated/account-brief.ts",
+      "default": "./src/generated/account-brief.ts"
+    }
+  }
+}

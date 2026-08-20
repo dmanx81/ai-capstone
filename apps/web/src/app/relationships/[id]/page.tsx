@@ -8,6 +8,9 @@ import {
 } from "../actions";
 import { createInteraction } from "../interaction-actions";
 
+// Synchronous LLM analysis is temporary; replace it with queued background processing before public launch.
+export const maxDuration = 60;
+
 type RelationshipPageProps = {
   params: Promise<{
     id: string;

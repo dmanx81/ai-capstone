@@ -1,25 +1,29 @@
 import os
+import threading
+import time
 from typing import Optional
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from apps.api.analyzer import analyze_account
 
 
-SUPABASE_URL = os.getenv(
-    "SUPABASE_URL",
-    "https://gmyrbxeyzkeinvwrdjip.supabase.co",
-)
+SUPABASE_URL = os.environ["SUPABASE_URL"]
 
 SUPABASE_ISSUER = f"{SUPABASE_URL}/auth/v1"
 SUPABASE_JWKS_URL = f"{SUPABASE_ISSUER}/.well-known/jwks.json"
 
 security = HTTPBearer(auto_error=False)
-jwks_client = PyJWKClient(SUPABASE_JWKS_URL)
+jwks_client = PyJWKClient(SUPABASE_JWKS_URL, timeout=5)
+
+RATE_LIMIT_REQUESTS = 30
+RATE_LIMIT_WINDOW_SECONDS = 60 * 60
+request_timestamps: dict[str, list[float]] = {}
+rate_limit_lock = threading.Lock()
 
 
 app = FastAPI(
@@ -29,7 +33,39 @@ app = FastAPI(
 
 
 class AnalyzeRequest(BaseModel):
-    customer_text: str
+    customer_text: str = Field(min_length=40, max_length=50_000)
+
+
+def enforce_rate_limit(user_id: str) -> None:
+    now = time.time()
+
+    with rate_limit_lock:
+        timestamps = request_timestamps.get(user_id, [])
+        active_timestamps = [
+            timestamp
+            for timestamp in timestamps
+            if now - timestamp < RATE_LIMIT_WINDOW_SECONDS
+        ]
+
+        if len(active_timestamps) >= RATE_LIMIT_REQUESTS:
+            retry_after = max(
+                1,
+                int(
+                    active_timestamps[0]
+                    + RATE_LIMIT_WINDOW_SECONDS
+                    - now
+                )
+                + 1,
+            )
+            request_timestamps[user_id] = active_timestamps
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Rate limit exceeded",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        active_timestamps.append(now)
+        request_timestamps[user_id] = active_timestamps
 
 
 def verify_supabase_token(
@@ -102,6 +138,16 @@ def analyze(
     request: AnalyzeRequest,
     claims: dict = Depends(verify_supabase_token),
 ):
+    user_id = claims.get("sub")
+
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication subject",
+        )
+
+    enforce_rate_limit(user_id)
+
     brief = analyze_account(
         request.customer_text
     )

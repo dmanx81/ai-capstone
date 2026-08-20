@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import type { AccountBrief } from "@ai-capstone/shared";
 
 const ALLOWED_TYPES = [
   "meeting",
@@ -11,35 +12,6 @@ const ALLOWED_TYPES = [
   "note",
   "transcript",
 ] as const;
-
-type Risk = {
-  title: string;
-  severity: "low" | "medium" | "high";
-  evidence: string;
-  confidence: number;
-};
-
-type Opportunity = {
-  title: string;
-  evidence: string;
-  recommended_action: string;
-};
-
-type ActionItem = {
-  action: string;
-  owner: string | null;
-  deadline: string | null;
-  evidence: string;
-};
-
-type AccountBrief = {
-  executive_summary: string;
-  risks: Risk[];
-  opportunities: Opportunity[];
-  action_items: ActionItem[];
-  next_steps: string[];
-  follow_up_email: string;
-};
 
 export async function createInteraction(formData: FormData) {
   const supabase = await createClient();
@@ -187,6 +159,11 @@ export async function createInteraction(formData: FormData) {
       brief_id: storedBrief.id,
       kind: "risk",
       title: risk.title,
+      severity: risk.severity,
+      confidence: risk.confidence,
+      owner: null,
+      evidence: risk.evidence,
+      direction: null,
       detail: [
         `Severity: ${risk.severity}`,
         `Confidence: ${Math.round(risk.confidence * 100)}%`,
@@ -201,6 +178,11 @@ export async function createInteraction(formData: FormData) {
       brief_id: storedBrief.id,
       kind: "opportunity",
       title: opportunity.title,
+      severity: null,
+      confidence: null,
+      owner: null,
+      evidence: opportunity.evidence,
+      direction: null,
       detail: [
         `Evidence: ${opportunity.evidence}`,
         `Recommended action: ${opportunity.recommended_action}`,
@@ -214,6 +196,11 @@ export async function createInteraction(formData: FormData) {
       brief_id: storedBrief.id,
       kind: "action",
       title: action.action,
+      severity: null,
+      confidence: null,
+      owner: action.owner,
+      evidence: action.evidence,
+      direction: null,
       detail: [
         action.owner ? `Owner: ${action.owner}` : null,
         action.deadline ? `Deadline: ${action.deadline}` : null,
