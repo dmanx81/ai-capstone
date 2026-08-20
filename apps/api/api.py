@@ -65,10 +65,94 @@ def verify_supabase_token(
     except HTTPException:
         raise
 
-    except Exception:
+    def verify_supabase_token(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
+    if credentials is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication token",
+            detail="Missing authentication token",
+        )
+
+    token = credentials.credentials
+
+    try:
+        # Debug only: inspect safe JWT metadata, never print the raw token.
+        header = jwt.get_unverified_header(token)
+
+        claims = jwt.decode(
+            token,
+            options={
+                "verify_signature": False,
+                "verify_exp": False,
+                "verify_aud": False,
+                "verify_iss": False,
+            },
+        )
+
+        print(
+            "JWT DEBUG:",
+            {
+                "alg": header.get("alg"),
+                "kid": header.get("kid"),
+                "iss": claims.get("iss"),
+                "aud": claims.get("aud"),
+                "role": claims.get("role"),
+                "exp": claims.get("exp"),
+            },
+        )
+
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256"],
+            audience="authenticated",
+            issuer=SUPABASE_ISSUER,
+        )
+
+        if payload.get("role") != "authenticated":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication role",
+            )
+
+        return payload
+
+    except HTTPException:
+        raise
+
+    except jwt.ExpiredSignatureError as error:
+        print("JWT ERROR: expired token:", repr(error))
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication token has expired",
+        )
+
+    except jwt.InvalidAudienceError as error:
+        print("JWT ERROR: invalid audience:", repr(error))
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token audience",
+        )
+
+    except jwt.InvalidIssuerError as error:
+        print("JWT ERROR: invalid issuer:", repr(error))
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token issuer",
+        )
+
+    except Exception as error:
+        print("JWT ERROR:", type(error).__name__, repr(error))
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token",
         )
 
 
