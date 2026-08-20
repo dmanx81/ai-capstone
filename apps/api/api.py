@@ -44,30 +44,6 @@ def verify_supabase_token(
     token = credentials.credentials
 
     try:
-        header = jwt.get_unverified_header(token)
-
-        claims = jwt.decode(
-            token,
-            options={
-                "verify_signature": False,
-                "verify_exp": False,
-                "verify_aud": False,
-                "verify_iss": False,
-            },
-        )
-
-        print(
-            "JWT DEBUG:",
-            {
-                "alg": header.get("alg"),
-                "kid": header.get("kid"),
-                "iss": claims.get("iss"),
-                "aud": claims.get("aud"),
-                "role": claims.get("role"),
-                "exp": claims.get("exp"),
-            },
-        )
-
         signing_key = jwks_client.get_signing_key_from_jwt(token)
 
         payload = jwt.decode(
@@ -89,33 +65,25 @@ def verify_supabase_token(
     except HTTPException:
         raise
 
-    except jwt.ExpiredSignatureError as error:
-        print("JWT ERROR: expired token:", repr(error))
-
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication token has expired",
         )
 
-    except jwt.InvalidAudienceError as error:
-        print("JWT ERROR: invalid audience:", repr(error))
-
+    except jwt.InvalidAudienceError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token audience",
         )
 
-    except jwt.InvalidIssuerError as error:
-        print("JWT ERROR: invalid issuer:", repr(error))
-
+    except jwt.InvalidIssuerError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token issuer",
         )
 
-    except Exception as error:
-        print("JWT ERROR:", type(error).__name__, repr(error))
-
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token",
