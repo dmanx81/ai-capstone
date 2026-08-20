@@ -22,6 +22,8 @@ type RelationshipPageProps = {
 
 type BriefContent = {
   executive_summary: string;
+  health_score?: number;
+  health_justification?: string;
   risks: Array<{
     title: string;
     severity: string;
@@ -125,6 +127,17 @@ export default async function RelationshipPage({
   }
 
   const briefContent = latestBrief?.content_json as BriefContent | undefined;
+  const healthScore = latestBrief?.health_score ?? null;
+  const healthLabel =
+    healthScore === null
+      ? null
+      : healthScore >= 80
+        ? "Healthy"
+        : healthScore >= 60
+          ? "Stable"
+          : healthScore >= 40
+            ? "At risk"
+            : "Critical";
 
   const risks =
     extractedItems?.filter((item) => item.kind === "risk") ?? [];
@@ -256,6 +269,28 @@ export default async function RelationshipPage({
                 <p className="mt-2 whitespace-pre-wrap text-gray-700">
                   {briefContent.executive_summary}
                 </p>
+              </section>
+
+              <section className="rounded-lg border bg-gray-50 p-5">
+                <h3 className="text-lg font-semibold">
+                  Relationship health
+                </h3>
+
+                <p className="mt-2 text-2xl font-semibold">
+                  {healthScore ?? "—"} / 100
+                </p>
+
+                {healthLabel && (
+                  <p className="mt-2 text-sm font-medium text-gray-600">
+                    {healthLabel}
+                  </p>
+                )}
+
+                {briefContent.health_justification && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    {briefContent.health_justification}
+                  </p>
+                )}
               </section>
 
               <section>

@@ -22,6 +22,8 @@ export type Risk = {
 
 export type AccountBrief = {
   executive_summary: string;
+  health_score: number;
+  health_justification: string;
   risks: Array<Risk>;
   opportunities: Array<Opportunity>;
   action_items: Array<ActionItem>;

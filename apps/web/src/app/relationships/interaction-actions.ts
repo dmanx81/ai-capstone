@@ -13,6 +13,10 @@ const ALLOWED_TYPES = [
   "transcript",
 ] as const;
 
+type AnalysisResponse = AccountBrief & {
+  model_used: string;
+};
+
 export async function createInteraction(formData: FormData) {
   const supabase = await createClient();
 
@@ -88,7 +92,7 @@ export async function createInteraction(formData: FormData) {
     );
   }
 
-  let brief: AccountBrief;
+  let brief: AnalysisResponse;
 
   try {
     const response = await fetch(`${apiBaseUrl}/analyze`, {
@@ -111,7 +115,7 @@ export async function createInteraction(formData: FormData) {
   );
 }
 
-    brief = (await response.json()) as AccountBrief;
+    brief = (await response.json()) as AnalysisResponse;
   } catch (error) {
     await supabase
       .from("interactions")
@@ -134,8 +138,8 @@ export async function createInteraction(formData: FormData) {
       account_id: accountId,
       interaction_id: interaction.id,
       content_json: brief,
-      health_score: null,
-      model_used: null,
+      health_score: brief.health_score,
+      model_used: brief.model_used,
     })
     .select("id")
     .single();

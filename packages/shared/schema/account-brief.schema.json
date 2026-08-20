@@ -106,6 +106,16 @@
       "title": "Executive Summary",
       "type": "string"
     },
+    "health_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Health Score",
+      "type": "integer"
+    },
+    "health_justification": {
+      "title": "Health Justification",
+      "type": "string"
+    },
     "risks": {
       "items": {
         "$ref": "#/$defs/Risk"
@@ -141,6 +151,8 @@
   },
   "required": [
     "executive_summary",
+    "health_score",
+    "health_justification",
     "risks",
     "opportunities",
     "action_items",

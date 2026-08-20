@@ -25,6 +25,8 @@ class ActionItem(BaseModel):
 
 class AccountBrief(BaseModel):
     executive_summary: str
+    health_score: int = Field(ge=0, le=100)
+    health_justification: str
     risks: List[Risk]
     opportunities: List[Opportunity]
     action_items: List[ActionItem]

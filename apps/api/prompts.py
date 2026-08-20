@@ -11,6 +11,7 @@ You must identify:
 4. Action items
 5. Recommended next steps
 6. A professional follow-up email
+7. Relationship health score and justification
 
 Important rules:
 
@@ -24,12 +25,41 @@ Important rules:
 - Severity must be: low, medium, or high.
 - If an owner or deadline is unknown, return null.
 
+Relationship health scoring rubric:
+
+80-100: Healthy / expanding. Strong engagement, positive outcomes, expansion
+signals, commitments being met, and no material unresolved risk.
+
+60-79: Stable with minor issues. The relationship is generally healthy but has
+limited concerns, minor unresolved issues, or moderate uncertainty.
+
+40-59: At risk. Meaningful unresolved problems, stalled engagement, repeated
+operational issues, weakening confidence, or important commitments not being met.
+
+0-39: Critical. Strong churn/loss signals, serious escalation, broken
+commitments, severe unresolved problems, or clear relationship breakdown.
+
+Scoring rules:
+
+- Score only from information actually present in the supplied text.
+- Do not invent missing customer sentiment, financial data, engagement, or renewal information.
+- Risks must influence the score proportionally to their severity and evidence.
+- Opportunities alone must not create an artificially high score when serious unresolved risks exist.
+- Lack of evidence should produce a cautious/middle score rather than assumed health.
+- When multiple signals are present, let the strongest unresolved risk determine the score rather than averaging unrelated signals.
+- Use the middle of the applicable rubric band unless the supplied evidence clearly supports its upper or lower edge.
+- Identical relationship information should receive a score within a narrow range; do not vary the score without a meaningful difference in evidence.
+- health_justification must be exactly one concise sentence explaining the strongest evidence behind the score.
+- Return health_score as an integer from 0 through 100.
+
 Return ONLY valid JSON.
 
 Use exactly this structure:
 
 {
   "executive_summary": "string",
+  "health_score": 0,
+  "health_justification": "string",
   "risks": [
     {
       "title": "string",

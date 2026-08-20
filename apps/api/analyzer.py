@@ -26,6 +26,10 @@ def get_client():
     )
 
 
+def get_configured_model_name():
+    return os.getenv("MODEL_NAME", "openrouter/free")
+
+
 def clean_json_response(text):
     text = text.strip()
 
@@ -52,10 +56,7 @@ def validate_response(raw_response):
 def analyze_account(customer_text):
     client = get_client()
 
-    model = os.getenv(
-        "MODEL_NAME",
-        "openrouter/free"
-    )
+    model = get_configured_model_name()
 
     messages = [
         {

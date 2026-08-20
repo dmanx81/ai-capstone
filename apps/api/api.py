@@ -9,7 +9,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 
-from apps.api.analyzer import analyze_account
+from apps.api.analyzer import analyze_account, get_configured_model_name
 
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -152,4 +152,7 @@ def analyze(
         request.customer_text
     )
 
-    return brief.model_dump()
+    return {
+        **brief.model_dump(),
+        "model_used": get_configured_model_name(),
+    }
