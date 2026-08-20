@@ -1,4 +1,4 @@
-from analyzer import analyze_account
+from apps.api.analyzer import analyze_account
 
 
 customer_notes = """

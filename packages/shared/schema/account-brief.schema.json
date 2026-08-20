@@ -1,0 +1,152 @@
+{
+  "$defs": {
+    "ActionItem": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner"
+        },
+        "deadline": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deadline"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "evidence"
+      ],
+      "title": "ActionItem",
+      "type": "object"
+    },
+    "Opportunity": {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "recommended_action": {
+          "title": "Recommended Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "evidence",
+        "recommended_action"
+      ],
+      "title": "Opportunity",
+      "type": "object"
+    },
+    "Risk": {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "evidence": {
+          "title": "Evidence",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "title",
+        "severity",
+        "evidence",
+        "confidence"
+      ],
+      "title": "Risk",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "executive_summary": {
+      "title": "Executive Summary",
+      "type": "string"
+    },
+    "risks": {
+      "items": {
+        "$ref": "#/$defs/Risk"
+      },
+      "title": "Risks",
+      "type": "array"
+    },
+    "opportunities": {
+      "items": {
+        "$ref": "#/$defs/Opportunity"
+      },
+      "title": "Opportunities",
+      "type": "array"
+    },
+    "action_items": {
+      "items": {
+        "$ref": "#/$defs/ActionItem"
+      },
+      "title": "Action Items",
+      "type": "array"
+    },
+    "next_steps": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Next Steps",
+      "type": "array"
+    },
+    "follow_up_email": {
+      "title": "Follow Up Email",
+      "type": "string"
+    }
+  },
+  "required": [
+    "executive_summary",
+    "risks",
+    "opportunities",
+    "action_items",
+    "next_steps",
+    "follow_up_email"
+  ],
+  "title": "AccountBrief",
+  "type": "object"
+}

@@ -2,8 +2,8 @@
 
 from typing import Any
 
-from analyzer import analyze_account
-from data.scenarios import SCENARIOS
+from apps.api.analyzer import analyze_account
+from apps.api.data.scenarios import SCENARIOS
 
 
 def has_required_sections(brief: Any) -> bool:

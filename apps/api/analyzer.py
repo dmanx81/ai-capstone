@@ -5,8 +5,8 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
 
-from prompts import SYSTEM_PROMPT
-from schemas import AccountBrief
+from apps.api.prompts import SYSTEM_PROMPT
+from apps.api.schemas import AccountBrief
 
 
 load_dotenv()
