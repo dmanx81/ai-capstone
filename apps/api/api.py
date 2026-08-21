@@ -16,11 +16,10 @@ from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 
 from apps.api.analyzer import (
-    analyze_account,
     answer_relationship_question,
     get_configured_model_name,
 )
-from apps.api.embeddings import ingest_interaction_memory, retrieve_relationship_context
+from apps.api.embeddings import retrieve_relationship_context
 from apps.api.schemas import RelationshipAnswer, RelationshipQuestion, RelationshipSource
 
 
@@ -275,6 +274,14 @@ def analyze(
     request: AnalyzeRequest,
     auth: AuthenticatedRequest = Depends(verify_supabase_token),
 ):
+    # Deprecated. This synchronous path predates the interaction ->
+    # analysis_jobs -> worker pipeline and never persisted a briefs row or an
+    # interactions.analysis_status transition, so a successful call here was
+    # invisible to billing.get_user_entitlement()'s usage count -- an
+    # unmetered quota bypass. The worker is now the only path allowed to call
+    # the provider and consume quota (see apps/api/BILLING.md). No caller in
+    # this repo uses this route; it is kept, gated, so external callers get a
+    # clear signal instead of a silent 404.
     claims = auth.claims
     user_id = claims.get("sub")
 
@@ -284,103 +291,10 @@ def analyze(
             detail="Invalid authentication subject",
         )
 
-    enforce_rate_limit(user_id)
-    request_id = str(uuid.uuid4())
-    started = time.perf_counter()
-
-    historical_context = None
-    try:
-        historical_context = retrieve_relationship_context(
-            str(request.account_id),
-            request.customer_text,
-            auth.bearer_token,
-            match_count=3,
-        )
-        historical_context = [
-            chunk
-            for chunk in historical_context
-            if chunk.interaction_id != str(request.interaction_id)
-        ]
-    except Exception as error:
-        logger.warning(
-            "historical_context_retrieval_failed",
-            extra={**build_request_log_fields(
-                request_id=request_id,
-                path="/analyze",
-                method="POST",
-                account_id=str(request.account_id),
-                interaction_id=str(request.interaction_id),
-                user_id=user_id,
-                duration_ms=round((time.perf_counter() - started) * 1000),
-                status_code=200,
-                request_meta={"error_category": type(error).__name__},
-            )},
-        )
-
-    analyze_result = analyze_account(
-        request.customer_text,
-        historical_context,
-        return_model_used=True,
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="analyze_endpoint_deprecated_use_queued_analysis",
     )
-    if isinstance(analyze_result, tuple):
-        brief, model_used = analyze_result
-    else:
-        brief = analyze_result
-        model_used = get_configured_model_name()
-
-    try:
-        ingestion = ingest_interaction_memory(
-            str(request.account_id),
-            str(request.interaction_id),
-            request.customer_text,
-            auth.bearer_token,
-        )
-        logger.info(
-            "interaction_memory_ingestion_completed",
-            extra={**build_request_log_fields(
-                request_id=request_id,
-                path="/analyze",
-                method="POST",
-                account_id=str(request.account_id),
-                interaction_id=str(request.interaction_id),
-                user_id=user_id,
-                duration_ms=round((time.perf_counter() - started) * 1000),
-                status_code=200,
-                request_meta={"chunks_created": ingestion.chunks_created, "model_used": model_used},
-            )},
-        )
-    except Exception as error:
-        logger.warning(
-            "interaction_memory_ingestion_failed",
-            extra={**build_request_log_fields(
-                request_id=request_id,
-                path="/analyze",
-                method="POST",
-                account_id=str(request.account_id),
-                interaction_id=str(request.interaction_id),
-                user_id=user_id,
-                duration_ms=round((time.perf_counter() - started) * 1000),
-                status_code=200,
-                request_meta={"error_category": type(error).__name__, "model_used": model_used},
-            )},
-        )
-
-    payload = {**brief.model_dump(), "model_used": model_used}
-    logger.info(
-        "analysis_completed",
-        extra={**build_request_log_fields(
-            request_id=request_id,
-            path="/analyze",
-            method="POST",
-            account_id=str(request.account_id),
-            interaction_id=str(request.interaction_id),
-            user_id=user_id,
-            duration_ms=round((time.perf_counter() - started) * 1000),
-            status_code=200,
-            request_meta={"model_used": model_used},
-        )},
-    )
-    return payload
 
 
 @app.post("/relationships/{account_id}/ask", response_model=RelationshipAnswer)

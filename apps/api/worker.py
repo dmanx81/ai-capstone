@@ -9,6 +9,7 @@ from typing import Any, Optional
 import requests
 
 from apps.api.analyzer import analyze_account, get_configured_model_name
+from apps.api.billing import BILLING_UNAVAILABLE_REASON, PLAN_LIMIT_REASON, BillingServiceError, get_account_entitlement
 from apps.api.embeddings import ingest_interaction_memory, retrieve_relationship_context
 
 logger = logging.getLogger("analysis_worker")
@@ -327,6 +328,54 @@ def process_job(job: dict[str, Any], supabase_url: str, service_token: str) -> d
             extra={**_job_log_fields(job.get("id"), interaction_id=interaction_id, account_id=account_id, interaction_account_id=str(interaction_account_id) if interaction_account_id is not None else None, analysis_status="failed", attempts=attempts_value)},
         )
         return {"success": False, "interaction_id": interaction_id, "status": "failed", "error": safe_error}
+
+    try:
+        entitlement = get_account_entitlement(account_id)
+    except BillingServiceError:
+        update_job_status(
+            supabase_url,
+            service_token,
+            str(job["id"]),
+            "failed",
+            last_error=BILLING_UNAVAILABLE_REASON,
+            attempts=attempts_value,
+        )
+        update_interaction_status(
+            supabase_url,
+            service_token,
+            interaction_id,
+            "failed",
+            analysis_error=BILLING_UNAVAILABLE_REASON,
+            analysis_attempts=attempts_value,
+        )
+        logger.warning(
+            "billing_check_failed",
+            extra={**_job_log_fields(job.get("id"), interaction_id=interaction_id, account_id=account_id, analysis_status="failed", attempts=attempts_value)},
+        )
+        return {"success": False, "interaction_id": interaction_id, "status": "failed", "error": BILLING_UNAVAILABLE_REASON}
+
+    if not entitlement.get("can_analyze"):
+        update_job_status(
+            supabase_url,
+            service_token,
+            str(job["id"]),
+            "failed",
+            last_error=PLAN_LIMIT_REASON,
+            attempts=attempts_value,
+        )
+        update_interaction_status(
+            supabase_url,
+            service_token,
+            interaction_id,
+            "failed",
+            analysis_error=PLAN_LIMIT_REASON,
+            analysis_attempts=attempts_value,
+        )
+        logger.info(
+            "plan_limit_reached",
+            extra={**_job_log_fields(job.get("id"), interaction_id=interaction_id, account_id=account_id, analysis_status="failed", attempts=attempts_value)},
+        )
+        return {"success": False, "interaction_id": interaction_id, "status": "failed", "error": PLAN_LIMIT_REASON}
 
     started_at = datetime.now(timezone.utc).isoformat()
     update_interaction_status(
