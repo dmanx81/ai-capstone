@@ -7,6 +7,7 @@ import {
   updateRelationship,
 } from "../actions";
 import { createInteraction } from "../interaction-actions";
+import RelationshipTimeline from "./relationship-timeline";
 
 // Synchronous LLM analysis is temporary; replace it with queued background processing before public launch.
 export const maxDuration = 60;
@@ -45,6 +46,15 @@ type BriefContent = {
   follow_up_email: string;
 };
 
+const interactionDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
+
 export default async function RelationshipPage({
   params,
   searchParams,
@@ -62,11 +72,34 @@ export default async function RelationshipPage({
     redirect("/auth/login");
   }
 
-  const { data: relationship, error } = await supabase
-    .from("accounts")
-    .select("id, name, industry, region, renewal_date, created_at")
-    .eq("id", id)
-    .maybeSingle();
+  const [relationshipResult, interactionsResult, briefsResult, itemsResult] =
+    await Promise.all([
+      supabase
+        .from("accounts")
+        .select("id, name, industry, region, renewal_date, created_at")
+        .eq("id", id)
+        .maybeSingle(),
+      supabase
+        .from("interactions")
+        .select("id, type, raw_text, occurred_at, created_at")
+        .eq("account_id", id)
+        .order("occurred_at", { ascending: false }),
+      supabase
+        .from("briefs")
+        .select("id, interaction_id, content_json, health_score, model_used, created_at")
+        .eq("account_id", id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("extracted_items")
+        .select("id, brief_id, kind, title, detail, status, created_at, resolved_at")
+        .eq("account_id", id)
+        .order("created_at", { ascending: true }),
+    ]);
+
+  const { data: relationship, error } = relationshipResult;
+  const { data: interactions, error: interactionsError } = interactionsResult;
+  const { data: briefs, error: briefsError } = briefsResult;
+  const { data: allExtractedItems, error: itemsError } = itemsResult;
 
   if (error) {
     throw new Error(`Failed to load relationship: ${error.message}`);
@@ -76,55 +109,25 @@ export default async function RelationshipPage({
     notFound();
   }
 
-  const { data: interactions, error: interactionsError } = await supabase
-    .from("interactions")
-    .select("id, type, raw_text, occurred_at, created_at")
-    .eq("account_id", id)
-    .order("occurred_at", { ascending: false });
-
   if (interactionsError) {
     throw new Error(
       `Failed to load interactions: ${interactionsError.message}`
     );
   }
 
-  const { data: latestBrief, error: briefError } = await supabase
-    .from("briefs")
-    .select("id, content_json, health_score, model_used, created_at")
-    .eq("account_id", id)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (briefError) {
-    throw new Error(`Failed to load latest brief: ${briefError.message}`);
+  if (briefsError) {
+    throw new Error(`Failed to load briefs: ${briefsError.message}`);
   }
 
-  let extractedItems:
-    | Array<{
-        id: string;
-        kind: string;
-        title: string;
-        detail: string | null;
-        status: string;
-      }>
-    | null = null;
-
-  if (latestBrief) {
-    const { data, error: itemsError } = await supabase
-      .from("extracted_items")
-      .select("id, kind, title, detail, status")
-      .eq("brief_id", latestBrief.id)
-      .order("created_at", { ascending: true });
-
-    if (itemsError) {
-      throw new Error(
-        `Failed to load extracted items: ${itemsError.message}`
-      );
-    }
-
-    extractedItems = data;
+  if (itemsError) {
+    throw new Error(`Failed to load extracted items: ${itemsError.message}`);
   }
+
+  const latestBrief = briefs?.[0] ?? null;
+  const nowIso = new Date().toISOString();
+  const extractedItems = latestBrief
+    ? allExtractedItems?.filter((item) => item.brief_id === latestBrief.id) ?? []
+    : [];
 
   const briefContent = latestBrief?.content_json as BriefContent | undefined;
   const healthScore = latestBrief?.health_score ?? null;
@@ -413,6 +416,27 @@ export default async function RelationshipPage({
           )}
         </div>
 
+        <RelationshipTimeline
+          nowIso={nowIso}
+          renewalDate={relationship.renewal_date}
+          interactions={interactions ?? []}
+          briefs={(briefs ?? []).map((brief) => ({
+            id: brief.id,
+            interaction_id: brief.interaction_id,
+            created_at: brief.created_at,
+            health_score: brief.health_score,
+          }))}
+          items={(allExtractedItems ?? []).map((item) => ({
+            id: item.id,
+            brief_id: item.brief_id,
+            kind: item.kind,
+            status: item.status,
+            title: item.title,
+            created_at: item.created_at,
+            resolved_at: item.resolved_at,
+          }))}
+        />
+
         <div className="mt-6 rounded-xl border bg-white p-8">
           <h2 className="text-2xl font-semibold">
             Add interaction
@@ -512,7 +536,9 @@ export default async function RelationshipPage({
                     </span>
 
                     <time className="text-sm text-gray-500">
-                      {new Date(interaction.occurred_at).toLocaleString()}
+                      {interactionDateFormatter.format(
+                        new Date(interaction.occurred_at)
+                      )}
                     </time>
                   </div>
 
