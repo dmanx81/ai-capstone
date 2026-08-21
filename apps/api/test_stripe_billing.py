@@ -50,6 +50,19 @@ class FakeRequest:
         return self._body
 
 
+class FakeStripeEvent:
+    """Stands in for the stripe.Event object stripe-python 15.x returns from
+    construct_event() -- has .to_dict() but is not itself dict-like, so a
+    stray event.get(...) call anywhere downstream would raise AttributeError
+    exactly as it did against the real SDK."""
+
+    def __init__(self, data: dict):
+        self._data = data
+
+    def to_dict(self) -> dict:
+        return self._data
+
+
 class CheckoutSecurityTests(unittest.TestCase):
     def test_unauthenticated_checkout_rejected(self):
         with self.assertRaises(api.HTTPException) as ctx:
@@ -381,6 +394,73 @@ class WebhookSignatureTests(unittest.TestCase):
         self.assertNotIn("hmac", source.lower())
 
 
+class EventNormalizationTests(unittest.TestCase):
+    """Regression for the stripe-python 15.x runtime bug: construct_event()
+    returns a Stripe Event object, not a dict, but handle_stripe_webhook_event
+    and everything downstream is written against dict semantics
+    (event.get(...)). Normalization must happen once, in
+    verify_and_parse_stripe_event, immediately after signature verification."""
+
+    def test_verify_and_parse_stripe_event_normalizes_event_object_to_dict(self):
+        raw_event_dict = {"id": "evt_1", "type": "checkout.session.completed", "data": {"object": {}}}
+        fake_event = FakeStripeEvent(raw_event_dict)
+
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event", return_value=fake_event
+        ):
+            result = billing.verify_and_parse_stripe_event(b"{}", "t=1,v1=abc")
+
+        self.assertIsInstance(result, dict)
+        self.assertNotIsInstance(result, FakeStripeEvent)
+        self.assertEqual(result, raw_event_dict)
+
+    def test_verify_and_parse_stripe_event_passes_through_plain_dict_unchanged(self):
+        # An already dict-like return value (no .to_dict()) must pass through
+        # untouched rather than erroring on the hasattr check.
+        raw_event_dict = {"id": "evt_2", "type": "customer.subscription.updated", "data": {"object": {}}}
+
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event", return_value=raw_event_dict
+        ):
+            result = billing.verify_and_parse_stripe_event(b"{}", "t=1,v1=abc")
+
+        self.assertEqual(result, raw_event_dict)
+
+    def test_handle_stripe_webhook_event_receives_dict_semantics_after_normalization(self):
+        raw_event_dict = {
+            "id": "evt_3",
+            "type": "customer.subscription.updated",
+            "data": {"object": _make_subscription(status="active", price_id=PRO_PRICE_ID)},
+        }
+        fake_event = FakeStripeEvent(raw_event_dict)
+
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event", return_value=fake_event
+        ):
+            normalized = billing.verify_and_parse_stripe_event(b"{}", "t=1,v1=abc")
+
+        # This is exactly the call that raised AttributeError against the
+        # real SDK: handle_stripe_webhook_event calls event.get(...).
+        with patch("apps.api.billing.resolve_user_id_for_stripe_customer", return_value="user-1"), patch(
+            "apps.api.billing.get_stripe_pro_price_id", return_value=PRO_PRICE_ID
+        ), patch("apps.api.billing.upsert_user_billing_fields") as mock_upsert:
+            billing.handle_stripe_webhook_event(normalized)  # must not raise AttributeError
+
+        mock_upsert.assert_called_once()
+
+    def test_signature_verification_still_happens_on_raw_bytes_before_normalization(self):
+        # Invalid signature must still fail before construct_event ever
+        # returns anything to normalize -- raw bytes go in unmodified.
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event",
+            side_effect=stripe.error.SignatureVerificationError("bad sig", "sig"),
+        ) as mock_construct:
+            with self.assertRaises(stripe.error.SignatureVerificationError):
+                billing.verify_and_parse_stripe_event(b"raw-payload-bytes", "bad-sig")
+
+        mock_construct.assert_called_once_with(b"raw-payload-bytes", "bad-sig", "whsec_test")
+
+
 class WebhookRouteTests(unittest.IsolatedAsyncioTestCase):
     async def test_invalid_signature_returns_400(self):
         request = FakeRequest(b'{"id": "evt_1"}', {"stripe-signature": "bad"})
@@ -485,6 +565,40 @@ class WebhookRouteTests(unittest.IsolatedAsyncioTestCase):
         route_body = source.split('@app.post("/billing/webhook")')[1]
         self.assertIn("await request.body()", route_body)
         self.assertNotIn("plan:", route_body)
+
+    async def test_idempotency_unchanged_end_to_end_with_real_stripe_event_object(self):
+        # Regression: exercise the full route (not verify_and_parse_stripe_event
+        # pre-mocked) with construct_event returning an Event-like object, the
+        # same shape that broke in production, and confirm claim/dispatch/mark
+        # still receive correct dict-derived event["id"]/event["type"] values
+        # and the idempotency lifecycle behaves exactly as before the fix.
+        raw_event_dict = {"id": "evt_real", "type": "customer.updated", "data": {"object": {}}}
+        fake_event = FakeStripeEvent(raw_event_dict)
+        request = FakeRequest(b'{"id": "evt_real"}', {"stripe-signature": "t=1,v1=abc"})
+
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event", return_value=fake_event
+        ), patch(
+            "apps.api.billing.claim_stripe_webhook_event",
+            return_value={"claimed": True, "already_completed": False},
+        ) as mock_claim, patch("apps.api.billing.mark_stripe_webhook_event_completed") as mock_complete:
+            result = await api.stripe_webhook(request)
+
+        self.assertEqual(result, {"status": "ok"})
+        mock_claim.assert_called_once_with("evt_real", "customer.updated")
+        mock_complete.assert_called_once_with("evt_real")
+
+        # Duplicate delivery of the same (now-normalized) event still short-circuits.
+        with patch("apps.api.billing.get_stripe_webhook_secret", return_value="whsec_test"), patch(
+            "apps.api.billing.stripe.Webhook.construct_event", return_value=FakeStripeEvent(raw_event_dict)
+        ), patch(
+            "apps.api.billing.claim_stripe_webhook_event",
+            return_value={"claimed": False, "already_completed": True},
+        ), patch("apps.api.billing.handle_stripe_webhook_event") as mock_handle:
+            result = await api.stripe_webhook(request)
+
+        self.assertEqual(result, {"status": "already_processed"})
+        mock_handle.assert_not_called()
 
 
 class WebhookMigrationStaticTests(unittest.TestCase):

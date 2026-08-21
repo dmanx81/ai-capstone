@@ -416,7 +416,17 @@ def verify_and_parse_stripe_event(payload: bytes, signature: Optional[str]) -> d
         raise StripeWebhookNotConfiguredError("STRIPE_WEBHOOK_SECRET is not configured")
     if not signature:
         raise stripe.error.SignatureVerificationError("Missing Stripe-Signature header", signature)
-    return stripe.Webhook.construct_event(payload, signature, webhook_secret)
+
+    # Signature verification happens on the raw bytes above, unchanged.
+    # stripe-python 15.x returns a Stripe Event object here, not a dict --
+    # the rest of this module (handle_stripe_webhook_event and everything it
+    # calls) is written against plain dict semantics (event.get(...)), so the
+    # verified event is normalized to a dict immediately, in this one place,
+    # right after verification succeeds.
+    event = stripe.Webhook.construct_event(payload, signature, webhook_secret)
+    if hasattr(event, "to_dict"):
+        event = event.to_dict()
+    return event
 
 
 def claim_stripe_webhook_event(event_id: str, event_type: str) -> dict[str, Any]:
