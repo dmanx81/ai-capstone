@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 import path from "path";
 
 const plausibleOrigin = (process.env.NEXT_PUBLIC_PLAUSIBLE_API_HOST || "https://plausible.io").replace(/\/$/, "");
@@ -54,4 +55,21 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const sentryEnabled = Boolean(
+  process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN
+);
+
+export default sentryEnabled
+  ? withSentryConfig(nextConfig, {
+      silent: true,
+      telemetry: false,
+      sourcemaps: {
+        disable: !process.env.SENTRY_AUTH_TOKEN,
+      },
+      webpack: {
+        treeshake: {
+          removeDebugLogging: true,
+        },
+      },
+    })
+  : nextConfig;
