@@ -1,7 +1,19 @@
+import type { Metadata } from "next";
 import { Manrope, Inter } from "next/font/google";
 
 import { MarketingFooter } from "./marketing-footer";
 import { MarketingHeader } from "./marketing-header";
+
+// Scoped to the public marketing route group only -- the authenticated
+// app's own pages are unaffected and keep the root layout's metadata.
+export const metadata: Metadata = {
+  title: {
+    default: "Tend — Relationship intelligence for Account Managers and Customer Success",
+    template: "%s | Tend",
+  },
+  description:
+    "Turn customer conversations into relationship health, risks, actions and clear next steps.",
+};
 
 // next/font/google self-hosts the font files at build time and serves them
 // from this origin -- no runtime request to a font CDN, and no CSP change

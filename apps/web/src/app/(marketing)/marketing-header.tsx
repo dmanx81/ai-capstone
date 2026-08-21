@@ -11,10 +11,19 @@ export function MarketingHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <Link
           href="/"
-          className="rounded font-[var(--font-marketing-display)] text-lg font-bold tracking-tight text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="flex items-center gap-2 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ outlineColor: palette.signalBlue }}
         >
-          Relationship Intelligence
+          {/* tend-mark.svg is drawn in navy for use on light backgrounds; on
+              this navy header a small light chip keeps it visible without
+              modifying the shared brand asset. */}
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element -- static brand asset, not a next/image candidate */}
+            <img src="/brand/tend-mark.svg" alt="" className="h-4 w-4" />
+          </span>
+          <span className="font-[var(--font-marketing-display)] text-lg font-bold tracking-tight text-white">
+            Tend
+          </span>
         </Link>
 
         <nav className="flex items-center gap-3 sm:gap-4" aria-label="Account">
