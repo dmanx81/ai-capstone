@@ -574,28 +574,62 @@ export default async function RelationshipPage({
         </div>
 
         <div className="mt-6 rounded-xl border bg-white p-8">
-          <h2 className="font-medium text-red-700">
-            Danger zone
+          <h2 className="text-2xl font-semibold">
+            Data controls
           </h2>
 
-          <p className="mt-1 text-sm text-gray-600">
-            Deleting this relationship will also delete its child data.
-          </p>
-
-          <form action={deleteRelationship} className="mt-4">
-            <input
-              type="hidden"
-              name="id"
-              value={relationship.id}
-            />
-
-            <button
-              type="submit"
-              className="rounded-md border border-red-300 bg-white px-4 py-2 text-sm text-red-700"
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href={`/api/relationships/${relationship.id}/export`}
+              className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white"
             >
-              Delete relationship
-            </button>
-          </form>
+              Export relationship data
+            </a>
+
+            <Link
+              href="/settings"
+              className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800"
+            >
+              Settings
+            </Link>
+          </div>
+
+          <div className="mt-6 rounded-lg border border-red-200 bg-red-50 p-5">
+            <h3 className="font-medium text-red-700">
+              Danger zone
+            </h3>
+
+            <p className="mt-1 text-sm text-red-700">
+              Deleting this relationship permanently removes the relationship and
+              its associated application data.
+            </p>
+
+            <form action={deleteRelationship} className="mt-4">
+              <input
+                type="hidden"
+                name="id"
+                value={relationship.id}
+              />
+
+              <label className="flex items-center gap-2 text-sm text-red-700">
+                <input
+                  type="checkbox"
+                  name="confirm_delete"
+                  value="yes"
+                  required
+                  className="h-4 w-4 rounded border-red-300"
+                />
+                I understand this action is permanent.
+              </label>
+
+              <button
+                type="submit"
+                className="mt-4 rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700"
+              >
+                Delete relationship
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </main>

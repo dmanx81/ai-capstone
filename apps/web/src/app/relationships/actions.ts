@@ -98,9 +98,14 @@ export async function deleteRelationship(formData: FormData) {
   }
 
   const id = String(formData.get("id") ?? "");
+  const confirmed = String(formData.get("confirm_delete") ?? "");
 
   if (!id) {
     redirect("/portfolio");
+  }
+
+  if (confirmed !== "yes") {
+    redirect(`/relationships/${id}?error=${encodeURIComponent("Please confirm deletion before continuing.")}`);
   }
 
   const { error } = await supabase

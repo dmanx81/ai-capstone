@@ -49,6 +49,63 @@ class AsyncAnalysisWorkerTests(unittest.TestCase):
         self.assertIn("attempts: existingJob?.attempts ?? 0", action)
         self.assertIn("onConflict: \"interaction_id\"", action)
 
+    def test_session9_settings_and_delete_ui_are_present(self):
+        with open("apps/web/src/app/settings/page.tsx", "r", encoding="utf-8") as settings_file:
+            settings = settings_file.read()
+        self.assertIn("Data controls", settings)
+        self.assertIn("relationship-memory chunks/embeddings", settings)
+        self.assertIn("Delete relationship", settings)
+
+    def test_session9_export_route_excludes_chunks_and_secrets(self):
+        with open("apps/web/src/app/api/relationships/[id]/export/route.ts", "r", encoding="utf-8") as export_file:
+            export_route = export_file.read()
+        self.assertIn('"relationship"', export_route)
+        self.assertIn('"interactions"', export_route)
+        self.assertIn('"briefs"', export_route)
+        self.assertIn('"extracted_items"', export_route)
+        self.assertNotIn("chunks", export_route)
+        self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", export_route)
+        self.assertNotIn("OPENAI_API_KEY", export_route)
+        self.assertNotIn("OPENROUTER_API_KEY", export_route)
+
+    def test_session9_delete_uses_account_row_and_no_manual_child_delete_sequence(self):
+        with open("apps/web/src/app/relationships/actions.ts", "r", encoding="utf-8") as actions_file:
+            actions = actions_file.read()
+        self.assertIn("from(\"accounts\")", actions)
+        self.assertIn(".delete()", actions)
+        self.assertNotIn("from(\"interactions\")", actions)
+        self.assertNotIn("from(\"briefs\")", actions)
+        self.assertNotIn("from(\"chunks\")", actions)
+
+    def test_session9_schema_cascade_graph_uses_account_parentage(self):
+        with open("supabase/migrations/001_schema.sql", "r", encoding="utf-8") as schema_file:
+            schema = schema_file.read()
+        self.assertIn("account_id uuid not null references public.accounts(id) on delete cascade", schema)
+        self.assertIn("interactions (", schema)
+        self.assertIn("briefs (", schema)
+        self.assertIn("extracted_items (", schema)
+        self.assertIn("chunks (", schema)
+
+    def test_session9_worker_handles_deleted_account_or_interaction(self):
+        with open("apps/api/worker.py", "r", encoding="utf-8") as worker_file:
+            worker_source = worker_file.read()
+        self.assertIn("Interaction/account mismatch detected", worker_source)
+        self.assertIn("interaction_account_id is None", worker_source)
+
+    def test_session9_no_service_role_in_web_source(self):
+        web_files = []
+        for root, _, files in __import__("os").walk("apps/web"):
+            for name in files:
+                if name.endswith((".ts", ".tsx", ".js", ".jsx")):
+                    web_files.append(root + "/" + name)
+
+        for path in web_files:
+            with open(path, "r", encoding="utf-8") as web_file:
+                text = web_file.read()
+            self.assertNotIn("SUPABASE_SERVICE_ROLE_KEY", text)
+            self.assertNotIn("OPENAI_API_KEY", text)
+            self.assertNotIn("OPENROUTER_API_KEY", text)
+
     def test_process_job_defensively_rejects_account_mismatch(self):
         interaction = SimpleNamespace(
             id="00000000-0000-0000-0000-000000000456",
