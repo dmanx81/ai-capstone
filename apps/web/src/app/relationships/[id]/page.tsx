@@ -6,12 +6,10 @@ import {
   deleteRelationship,
   updateRelationship,
 } from "../actions";
-import { createInteraction } from "../interaction-actions";
+import { createInteraction, retryInteractionAnalysis } from "../interaction-actions";
+import RelationshipStatus from "./relationship-status";
 import RelationshipTimeline from "./relationship-timeline";
 import RelationshipQa from "./relationship-qa";
-
-// Synchronous LLM analysis is temporary; replace it with queued background processing before public launch.
-export const maxDuration = 60;
 
 type RelationshipPageProps = {
   params: Promise<{
@@ -82,7 +80,7 @@ export default async function RelationshipPage({
         .maybeSingle(),
       supabase
         .from("interactions")
-        .select("id, type, raw_text, occurred_at, created_at")
+        .select("id, type, raw_text, occurred_at, created_at, analysis_status, analysis_error, analysis_attempts, analysis_started_at, analysis_completed_at")
         .eq("account_id", id)
         .order("occurred_at", { ascending: false }),
       supabase
@@ -125,6 +123,7 @@ export default async function RelationshipPage({
   }
 
   const latestBrief = briefs?.[0] ?? null;
+  const latestInteraction = interactions?.[0] ?? null;
   const nowIso = new Date().toISOString();
   const extractedItems = latestBrief
     ? allExtractedItems?.filter((item) => item.brief_id === latestBrief.id) ?? []
@@ -132,6 +131,8 @@ export default async function RelationshipPage({
 
   const briefContent = latestBrief?.content_json as BriefContent | undefined;
   const healthScore = latestBrief?.health_score ?? null;
+  const latestInteractionStatus = latestInteraction?.analysis_status ?? "complete";
+  const latestInteractionError = latestInteraction?.analysis_error ?? null;
   const healthLabel =
     healthScore === null
       ? null
@@ -259,7 +260,25 @@ export default async function RelationshipPage({
             Latest AI brief
           </h2>
 
-          {!latestBrief || !briefContent ? (
+          {latestInteractionStatus === "queued" ? (
+            <RelationshipStatus
+              status="queued"
+              retryAction={null}
+              error={null}
+            />
+          ) : latestInteractionStatus === "analyzing" ? (
+            <RelationshipStatus
+              status="analyzing"
+              retryAction={null}
+              error={null}
+            />
+          ) : latestInteractionStatus === "failed" ? (
+            <RelationshipStatus
+              status="failed"
+              retryAction={retryInteractionAnalysis.bind(null, latestInteraction.id)}
+              error={latestInteractionError}
+            />
+          ) : !latestBrief || !briefContent ? (
             <p className="mt-4 text-gray-600">
               No AI brief yet. Add an interaction to generate one.
             </p>

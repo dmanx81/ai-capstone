@@ -19,6 +19,12 @@ The active API entrypoint is `apps.api.api:app`. Run it with:
 uvicorn apps.api.api:app --host 0.0.0.0 --port 8000
 ```
 
+For background analysis processing, run the durable worker separately:
+
+```sh
+PYTHONPATH=. python -m apps.api.worker --poll-interval 5
+```
+
 The web app is under `apps/web/`:
 
 ```sh

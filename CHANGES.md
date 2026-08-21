@@ -97,3 +97,43 @@ the current interaction as primary while historical context remains
 supplementary. Retrieval failure falls back to current-only analysis. Both
 prompts explicitly treat retrieved text as untrusted data and reject embedded
 instructions; no migration was required.
+
+## Session 8 - Async Analysis Queue
+
+Session 8 replaces the synchronous `/analyze` request flow with a durable
+queued worker model backed by Postgres. The web app inserts a new interaction
+with `analysis_status = 'queued'`, creates a single `analysis_jobs` row keyed by
+`interaction_id`, and returns immediately without waiting for model analysis or
+embedding ingestion. The FastAPI worker runs as a persistent server-side process,
+claims one queued row atomically, and processes the linked account/interaction
+relationship while keeping the row-level security boundary intact.
+
+The queue schema was added in `supabase/migrations/007_async_analysis.sql`.
+It introduces `interactions.analysis_status`, `analysis_error`,
+`analysis_started_at`, `analysis_completed_at`, and `analysis_attempts`, plus a
+unique `analysis_jobs` table keyed to each interaction. A deterministic
+`briefs_interaction_id_unique_idx` prevents duplicate successful briefs on the
+same interaction. The worker uses a server-only `SUPABASE_SERVICE_ROLE_KEY` to
+read and write database records, never the caller JWT, and validates the
+account/interaction link before processing. Users can retry only their own
+failed interaction through a server action; retries reset the interaction back
+to `queued`, increment the job attempts, and leave completed interactions alone
+unless a deliberate retry is requested.
+
+The worker handles Session 7 historical retrieval in the background before
+analysis, persists the brief and extracted items idempotently, and records
+failure state without deleting the interaction. If an embedding or retrieval
+step fails, the job stays retryable and the error message is sanitized before
+storage. The relationship page polls every few seconds while queued or
+analyzing, stops on terminal states, and renders concise failed/retry states.
+The temporary synchronous `maxDuration = 60` workaround has been removed from
+`apps/web/src/app/relationships/[id]/page.tsx`.
+
+The worker startup command is:
+
+```sh
+PYTHONPATH=. python -m apps.api.worker --poll-interval 5
+```
+
+Validation includes the async-analysis worker test cases, Python compile checks,
+web lint/typecheck/build verification, and the generated shared contract check.

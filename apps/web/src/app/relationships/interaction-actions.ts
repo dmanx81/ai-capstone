@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
-import type { AccountBrief } from "@ai-capstone/shared";
 
 const ALLOWED_TYPES = [
   "meeting",
@@ -12,10 +11,6 @@ const ALLOWED_TYPES = [
   "note",
   "transcript",
 ] as const;
-
-type AnalysisResponse = AccountBrief & {
-  model_used: string;
-};
 
 export type RelationshipAnswerResponse = {
   answer: string;
@@ -125,8 +120,9 @@ export async function createInteraction(formData: FormData) {
       type,
       raw_text: rawText,
       occurred_at: occurredAt,
+      analysis_status: "queued",
     })
-    .select("id")
+    .select("id, account_id")
     .single();
 
   if (interactionError || !interaction) {
@@ -137,82 +133,20 @@ export async function createInteraction(formData: FormData) {
     );
   }
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    redirect("/auth/login");
-  }
-
-  const apiBaseUrl = process.env.API_BASE_URL;
-
-  if (!apiBaseUrl) {
-    await supabase
-      .from("interactions")
-      .delete()
-      .eq("id", interaction.id);
-
-    redirect(
-      `/relationships/${accountId}?error=API_BASE_URL%20is%20not%20configured`
-    );
-  }
-
-  let brief: AnalysisResponse;
-
-  try {
-    const response = await fetch(`${apiBaseUrl}/analyze`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: JSON.stringify({
-        customer_text: rawText,
+  const { error: jobError } = await supabase
+    .from("analysis_jobs")
+    .upsert(
+      {
         account_id: accountId,
         interaction_id: interaction.id,
-      }),
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-  const errorBody = await response.text();
-
-  throw new Error(
-    `Analysis API returned ${response.status}: ${errorBody}`
-  );
-}
-
-    brief = (await response.json()) as AnalysisResponse;
-  } catch (error) {
-    await supabase
-      .from("interactions")
-      .delete()
-      .eq("id", interaction.id);
-
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Analysis failed";
-
-    redirect(
-      `/relationships/${accountId}?error=${encodeURIComponent(message)}`
+        status: "queued",
+        attempts: 0,
+        last_error: null,
+      },
+      { onConflict: "interaction_id" }
     );
-  }
 
-  const { data: storedBrief, error: briefError } = await supabase
-    .from("briefs")
-    .insert({
-      account_id: accountId,
-      interaction_id: interaction.id,
-      content_json: brief,
-      health_score: brief.health_score,
-      model_used: brief.model_used,
-    })
-    .select("id")
-    .single();
-
-  if (briefError || !storedBrief) {
+  if (jobError) {
     await supabase
       .from("interactions")
       .delete()
@@ -220,97 +154,91 @@ export async function createInteraction(formData: FormData) {
 
     redirect(
       `/relationships/${accountId}?error=${encodeURIComponent(
-        briefError?.message ?? "Failed to save brief"
+        jobError.message ?? "Failed to queue analysis"
       )}`
     );
-  }
-
-  const extractedItems = [
-    ...brief.risks.map((risk) => ({
-      account_id: accountId,
-      brief_id: storedBrief.id,
-      kind: "risk",
-      title: risk.title,
-      severity: risk.severity,
-      confidence: risk.confidence,
-      owner: null,
-      evidence: risk.evidence,
-      direction: null,
-      detail: [
-        `Severity: ${risk.severity}`,
-        `Confidence: ${Math.round(risk.confidence * 100)}%`,
-        `Evidence: ${risk.evidence}`,
-      ].join("\n"),
-      status: "open",
-      due_date: null,
-    })),
-
-    ...brief.opportunities.map((opportunity) => ({
-      account_id: accountId,
-      brief_id: storedBrief.id,
-      kind: "opportunity",
-      title: opportunity.title,
-      severity: null,
-      confidence: null,
-      owner: null,
-      evidence: opportunity.evidence,
-      direction: null,
-      detail: [
-        `Evidence: ${opportunity.evidence}`,
-        `Recommended action: ${opportunity.recommended_action}`,
-      ].join("\n"),
-      status: "open",
-      due_date: null,
-    })),
-
-    ...brief.action_items.map((action) => ({
-      account_id: accountId,
-      brief_id: storedBrief.id,
-      kind: "action",
-      title: action.action,
-      severity: null,
-      confidence: null,
-      owner: action.owner,
-      evidence: action.evidence,
-      direction: null,
-      detail: [
-        action.owner ? `Owner: ${action.owner}` : null,
-        action.deadline ? `Deadline: ${action.deadline}` : null,
-        `Evidence: ${action.evidence}`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      status: "open",
-      due_date: null,
-    })),
-  ];
-
-  if (extractedItems.length > 0) {
-    const { error: itemsError } = await supabase
-      .from("extracted_items")
-      .insert(extractedItems);
-
-    if (itemsError) {
-      await supabase
-        .from("briefs")
-        .delete()
-        .eq("id", storedBrief.id);
-
-      await supabase
-        .from("interactions")
-        .delete()
-        .eq("id", interaction.id);
-
-      redirect(
-        `/relationships/${accountId}?error=${encodeURIComponent(
-          itemsError.message
-        )}`
-      );
-    }
   }
 
   revalidatePath(`/relationships/${accountId}`);
   revalidatePath("/portfolio");
 
   redirect(`/relationships/${accountId}`);
+}
+
+export async function retryInteractionAnalysis(interactionId: string) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    throw new Error("Authentication required");
+  }
+
+  const { data: interaction, error: interactionError } = await supabase
+    .from("interactions")
+    .select("id, account_id, analysis_status")
+    .eq("id", interactionId)
+    .single();
+
+  if (interactionError || !interaction) {
+    throw new Error("Interaction not found");
+  }
+
+  const { data: account, error: accountError } = await supabase
+    .from("accounts")
+    .select("id, owner_id")
+    .eq("id", interaction.account_id)
+    .single();
+
+  if (accountError || !account || account.owner_id !== user.id) {
+    throw new Error("You do not have access to retry this interaction");
+  }
+
+  const { error: updateError } = await supabase
+    .from("interactions")
+    .update({
+      analysis_status: "queued",
+      analysis_error: null,
+      analysis_started_at: null,
+      analysis_completed_at: null,
+    })
+    .eq("id", interactionId);
+
+  if (updateError) {
+    throw new Error(updateError.message);
+  }
+
+  const { data: existingJob, error: existingJobError } = await supabase
+    .from("analysis_jobs")
+    .select("attempts")
+    .eq("interaction_id", interactionId)
+    .maybeSingle();
+
+  if (existingJobError) {
+    throw new Error(existingJobError.message);
+  }
+
+  const { error: jobError } = await supabase
+    .from("analysis_jobs")
+    .upsert(
+      {
+        account_id: interaction.account_id,
+        interaction_id: interactionId,
+        status: "queued",
+        attempts: existingJob?.attempts ?? 0,
+        last_error: null,
+      },
+      { onConflict: "interaction_id" }
+    );
+
+  if (jobError) {
+    throw new Error(jobError.message);
+  }
+
+  revalidatePath(`/relationships/${interaction.account_id}`);
+  revalidatePath("/portfolio");
+
+  return { ok: true };
 }
