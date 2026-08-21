@@ -58,6 +58,68 @@ This is a manual acceptance procedure: no local restore is performed automatical
 - How to restart worker: run the worker command with the project environment loaded and confirm the required env vars exist.
 - Recovery: verify the worker has network access, then allow the queue to drain again.
 
+## Systemd worker service
+
+The repo includes an example unit for the background worker at `deploy/systemd/relationship-worker.service`. It is designed for service supervision without embedding secrets in the unit file. Required secrets such as `SUPABASE_SERVICE_ROLE_KEY` must be stored in a protected `EnvironmentFile` readable only by the service account and must never be committed or embedded directly in the systemd unit. Keep only non-secret values in the unit file itself.
+
+### Install and enable
+
+```sh
+sudo install -d /etc/systemd/system
+sudo cp deploy/systemd/relationship-worker.service /etc/systemd/system/relationship-worker.service
+sudo systemctl daemon-reload
+sudo systemctl enable relationship-worker
+```
+
+### Start, status, restart, stop
+
+```sh
+sudo systemctl start relationship-worker
+sudo systemctl status relationship-worker --no-pager
+sudo systemctl restart relationship-worker
+sudo systemctl stop relationship-worker
+```
+
+### Journal logs
+
+```sh
+sudo journalctl -u relationship-worker -f
+sudo journalctl -u relationship-worker -n 100 --no-pager
+```
+
+### Confirm the worker is draining queued jobs
+
+```sh
+sudo systemctl status relationship-worker --no-pager
+sudo journalctl -u relationship-worker -f
+```
+
+Check for repeated `job_account_mismatch`, `job_missing_interaction`, and queued job transitions in the application logs. A healthy worker should reduce `analysis_jobs` rows in `queued` or `analyzing` states as work completes and restarts only on real failures.
+
+### Roll back to manual execution
+
+```sh
+sudo systemctl stop relationship-worker
+PYTHONPATH=. SUPABASE_URL="${SUPABASE_URL}" SUPABASE_SERVICE_ROLE_KEY="${SUPABASE_SERVICE_ROLE_KEY}" python -m apps.api.worker --poll-interval 5
+```
+
+This is for incident response only. Never run the service with credentials embedded directly in a unit file or shell history.
+
+## Stale job monitoring
+
+Use the script in `scripts/check_stale_analysis_jobs.py` to find rows older than the operational threshold. The default window is 10 minutes for both `queued` and `analyzing` jobs.
+
+```sh
+source .venv/bin/activate
+SUPABASE_URL="${SUPABASE_URL}" SUPABASE_SERVICE_ROLE_KEY="${SUPABASE_SERVICE_ROLE_KEY}" python scripts/check_stale_analysis_jobs.py
+```
+
+The script exits nonzero when stale rows are present so cron, n8n, or a monitoring system can alert. Example integrations:
+
+- cron: run every 5 minutes and alert on exit code 1
+- n8n: trigger a workflow if the script exits nonzero
+- Telegram: use the shell output as a short alert body
+
 ## Rollback deployment
 
 - Git/Vercel rollback: revert to the last known-good deployment and confirm the deployed code version matches the intended release.

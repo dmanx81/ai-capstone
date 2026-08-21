@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import re
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -21,6 +22,7 @@ def _job_log_fields(job_id: Any, **kwargs: Any) -> dict[str, Any]:
 def sanitize_analysis_error(raw_error: Any) -> str:
     message = str(raw_error) if raw_error is not None else "Unknown analysis failure"
     redacted = message
+
     for token in (
         os.getenv("OPENROUTER_API_KEY", ""),
         os.getenv("OPENAI_API_KEY", ""),
@@ -29,16 +31,11 @@ def sanitize_analysis_error(raw_error: Any) -> str:
         if token:
             redacted = redacted.replace(token, "[REDACTED]")
 
-    redacted = __import__("re").sub(
-        r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,;]+",
-        r"\1=[REDACTED]",
-        redacted,
-    )
-    redacted = __import__("re").sub(
-        r"(?i)authorization\s*:\s*bearer\s+[^\s,;]+",
-        "Authorization: Bearer [REDACTED]",
-        redacted,
-    )
+    redacted = re.sub(r"(?i)(api[_-]?key|token|secret|password)\s*[:=]\s*[^\s,;]+", r"\1=[REDACTED]", redacted)
+    redacted = re.sub(r"(?i)(Authorization\s*:\s*Bearer\s+|bearer\s+)([A-Za-z0-9._~+/=-]+)", r"Authorization: Bearer [REDACTED]", redacted)
+    redacted = re.sub(r"(?i)(jwt|bearer|token|authorization)[^\n\r]*[:=][^\n\r,;]+", r"\1=[REDACTED]", redacted)
+    redacted = re.sub(r"(?i)(customer_text|raw_text|prompt|query|instructions?)\s*[:=]\s*.+", r"\1=[REDACTED]", redacted)
+    redacted = re.sub(r"(?i)service[-_ ]role[^\n\r]*[:=][^\n\r,;]+", "service-role=[REDACTED]", redacted)
     return redacted[:1000]
 
 

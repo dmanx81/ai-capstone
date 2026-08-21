@@ -35,6 +35,39 @@ class ApiIngestionTests(unittest.TestCase):
         self.assertEqual(response["executive_summary"], "ok")
         self.assertEqual(response["model_used"], "test-model")
 
+    def test_ask_route_uses_same_rate_limit_as_analyze(self):
+        api.request_timestamps.clear()
+        api.RATE_LIMIT_REQUESTS = 1
+        api.RATE_LIMIT_WINDOW_SECONDS = 60
+
+        question = api.RelationshipQuestion(question="What happened with this relationship?")
+        auth = api.AuthenticatedRequest(
+            claims={"sub": "user-rate-limit"},
+            bearer_token="caller.jwt.value",
+        )
+
+        with patch("apps.api.api.retrieve_relationship_context", return_value=[]):
+            first = api.ask_relationship(
+                "00000000-0000-0000-0000-000000000001",
+                question,
+                auth,
+            )
+            self.assertEqual(
+                first.answer,
+                "There is insufficient evidence in this relationship's recorded interactions to answer that question.",
+            )
+
+        with patch("apps.api.api.retrieve_relationship_context", return_value=[]):
+            with self.assertRaises(api.HTTPException) as ctx:
+                api.ask_relationship(
+                    "00000000-0000-0000-0000-000000000001",
+                    question,
+                    auth,
+                )
+
+        self.assertEqual(ctx.exception.status_code, 429)
+        self.assertIn("Retry-After", ctx.exception.headers)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -92,6 +92,75 @@ class AsyncAnalysisWorkerTests(unittest.TestCase):
         self.assertIn("Interaction/account mismatch detected", worker_source)
         self.assertIn("interaction_account_id is None", worker_source)
 
+    def test_adversarial_account_interaction_mismatch_is_rejected_before_analysis(self):
+        interaction = SimpleNamespace(
+            id="00000000-0000-0000-0000-000000000456",
+            account_id="00000000-0000-0000-0000-000000000999",
+            raw_text="interaction text that should never be processed",
+            analysis_status="queued",
+        )
+        job = {
+            "id": "00000000-0000-0000-0000-000000000123",
+            "interaction_id": interaction.id,
+            "account_id": "00000000-0000-0000-0000-000000000789",
+            "status": "queued",
+            "attempts": 2,
+        }
+
+        with patch("apps.api.worker.fetch_interaction", return_value=interaction), patch(
+            "apps.api.worker.perform_analysis"
+        ) as mock_perform, patch(
+            "apps.api.worker.persist_brief_and_items"
+        ) as mock_persist, patch(
+            "apps.api.worker.update_job_status"
+        ) as mock_update_job, patch(
+            "apps.api.worker.update_interaction_status"
+        ) as mock_update_interaction:
+            result = worker.process_job(job, "https://example.supabase.co", "service-token")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("mismatch", result["error"].lower())
+        mock_perform.assert_not_called()
+        mock_persist.assert_not_called()
+        mock_update_interaction.assert_not_called()
+        mock_update_job.assert_called_once()
+
+    def test_deleted_interaction_and_missing_job_are_safe_failures(self):
+        job = {
+            "id": "00000000-0000-0000-0000-000000000123",
+            "interaction_id": "00000000-0000-0000-0000-000000000456",
+            "account_id": "00000000-0000-0000-0000-000000000789",
+            "status": "queued",
+            "attempts": 4,
+        }
+        with patch("apps.api.worker.fetch_interaction", return_value=None), patch(
+            "apps.api.worker.perform_analysis"
+        ) as mock_perform, patch(
+            "apps.api.worker.update_job_status"
+        ) as mock_update_job:
+            result = worker.process_job(job, "https://example.supabase.co", "service-token")
+
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "failed")
+        mock_perform.assert_not_called()
+        mock_update_job.assert_called_once()
+
+    def test_worker_security_artifacts_exist(self):
+        self.assertTrue(__import__("os").path.exists("deploy/systemd/relationship-worker.service"))
+        self.assertTrue(__import__("os").path.exists("scripts/check_stale_analysis_jobs.py"))
+
+    def test_stale_job_monitor_uses_real_schema_fields_only(self):
+        with open("scripts/check_stale_analysis_jobs.py", "r", encoding="utf-8") as script_file:
+            script = script_file.read()
+        self.assertIn("analysis_jobs", script)
+        self.assertIn("id", script)
+        self.assertIn("status", script)
+        self.assertIn("created_at", script)
+        self.assertIn("started_at", script)
+        self.assertIn("attempts", script)
+        self.assertNotIn("updated_at", script)
+
     def test_session9_no_service_role_in_web_source(self):
         web_files = []
         for root, _, files in __import__("os").walk("apps/web"):
@@ -122,6 +191,8 @@ class AsyncAnalysisWorkerTests(unittest.TestCase):
         }
 
         with patch("apps.api.worker.fetch_interaction", return_value=interaction), patch(
+            "apps.api.worker.update_interaction_status"
+        ) as mock_update_interaction, patch(
             "apps.api.worker.update_job_status"
         ) as update_job_status:
             result = worker.process_job(job, "https://example.supabase.co", "service-token")
@@ -129,6 +200,7 @@ class AsyncAnalysisWorkerTests(unittest.TestCase):
         self.assertFalse(result["success"])
         self.assertEqual(result["status"], "failed")
         self.assertIn("mismatch", result["error"].lower())
+        mock_update_interaction.assert_not_called()
         update_job_status.assert_called_once()
 
     def test_process_job_marks_failure_without_deleting_interaction(self):

@@ -169,3 +169,42 @@ This session intentionally does not add migration changes, does not weaken RLS,
 and does not expose service-role or provider secrets to browser-side code. The
 repository remains on the safe baseline while preparing for safer production
 operations and clearer incident response.
+
+## Beta Hardening - Worker Security + Operations
+
+This beta-hardening pass focuses on the privileged async worker path: the worker
+uses the Supabase service-role key and therefore must treat all inbound job data
+as untrusted. The main threat model is a cross-account mismatch or stale job that
+attempts to process an interaction outside the job's declared account boundary.
+
+The worker now defensively rejects mismatched `job.account_id` versus
+`interaction.account_id` before any analysis, retrieval, or provider call is made,
+marks the job itself as failed while leaving the mismatched interaction untouched,
+and keeps all logging sanitized. This preserves the trust boundary without
+changing the user-facing product flow or the database write targets.
+
+The retry/idempotency posture remains conservative: the unique brief-per-
+interaction index remains the authoritative guardrail, duplicate job rows are not
+created by the retry path, and attempt history is preserved rather than reset.
+The queue remains best-effort and retryable for transient provider failures, while
+embedding failures remain non-blocking for the brief generation path.
+
+The systemd example unit at `deploy/systemd/relationship-worker.service` uses a
+service account and `EnvironmentFile` instead of hardcoded secrets, with restart
+policy set to `Restart=always` and a short delay. The stale-job monitor at
+`scripts/check_stale_analysis_jobs.py` reads only the real `analysis_jobs` schema
+fields (`id`, `status`, `created_at`, `started_at`, `attempts`), exits nonzero on
+stale rows, and can be used by cron / n8n / Telegram monitors without creating a
+new notification service.
+
+The authenticated Q&A endpoint `/relationships/{account_id}/ask` is already
+covered by the same per-user rate-limit mechanism as `/analyze`: 30 requests per
+60-minute window, with `Retry-After` returned when the user exceeds the limit.
+This is documented and covered by a regression test.
+
+Validation performed in this session includes the worker regression suite, the
+API rate-limit regression, Python compile checks, generated shared types check,
+web lint/typecheck/build validation, and a git diff sanity pass. Live/manual
+acceptance remains required for a real malicious mismatch run, worker kill/restart
+recovery, queue-drain validation, and stale-job alert verification in a safe test
+environment.
