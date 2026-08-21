@@ -8,6 +8,7 @@ import {
 } from "../actions";
 import { createInteraction } from "../interaction-actions";
 import RelationshipTimeline from "./relationship-timeline";
+import RelationshipQa from "./relationship-qa";
 
 // Synchronous LLM analysis is temporary; replace it with queued background processing before public launch.
 export const maxDuration = 60;
@@ -436,6 +437,8 @@ export default async function RelationshipPage({
             resolved_at: item.resolved_at,
           }))}
         />
+
+        <RelationshipQa accountId={relationship.id} />
 
         <div className="mt-6 rounded-xl border bg-white p-8">
           <h2 className="text-2xl font-semibold">

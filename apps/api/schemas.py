@@ -32,3 +32,20 @@ class AccountBrief(BaseModel):
     action_items: List[ActionItem]
     next_steps: List[str]
     follow_up_email: str
+
+
+class RelationshipQuestion(BaseModel):
+    question: str = Field(min_length=3, max_length=2_000)
+
+
+class RelationshipSource(BaseModel):
+    interaction_id: str
+    created_at: str
+    similarity: float
+    excerpt: str
+
+
+class RelationshipAnswer(BaseModel):
+    answer: str
+    sources: List[RelationshipSource]
+    model_used: str

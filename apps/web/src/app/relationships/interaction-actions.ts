@@ -17,6 +17,72 @@ type AnalysisResponse = AccountBrief & {
   model_used: string;
 };
 
+export type RelationshipAnswerResponse = {
+  answer: string;
+  sources: Array<{
+    interaction_id: string;
+    created_at: string;
+    similarity: number;
+    excerpt: string;
+  }>;
+  model_used: string;
+};
+
+export type RelationshipAnswerResult =
+  | { ok: true; data: RelationshipAnswerResponse }
+  | { ok: false; message: string };
+
+export async function askRelationship(
+  accountId: string,
+  question: string,
+): Promise<RelationshipAnswerResult> {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    return { ok: false, message: "Your session has expired. Please sign in again." };
+  }
+
+  const apiBaseUrl = process.env.API_BASE_URL;
+  if (!apiBaseUrl) {
+    return { ok: false, message: "Relationship Q&A is not configured." };
+  }
+
+  try {
+    const response = await fetch(
+      `${apiBaseUrl}/relationships/${accountId}/ask`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ question }),
+        cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: "Relationship Q&A is temporarily unavailable.",
+      };
+    }
+
+    return {
+      ok: true,
+      data: (await response.json()) as RelationshipAnswerResponse,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Relationship Q&A is temporarily unavailable.",
+    };
+  }
+}
+
 export async function createInteraction(formData: FormData) {
   const supabase = await createClient();
 

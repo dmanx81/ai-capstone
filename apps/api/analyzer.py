@@ -5,7 +5,12 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
 
-from apps.api.prompts import SYSTEM_PROMPT
+from apps.api.prompts import (
+    RELATIONSHIP_QA_SYSTEM_PROMPT,
+    SYSTEM_PROMPT,
+    build_enriched_analysis_prompt,
+    build_relationship_context,
+)
 from apps.api.schemas import AccountBrief
 
 
@@ -53,11 +58,16 @@ def validate_response(raw_response):
     return AccountBrief.model_validate(data)
 
 
-def analyze_account(customer_text):
+def analyze_account(customer_text, historical_chunks=None):
     client = get_client()
 
     model = get_configured_model_name()
 
+    user_content = (
+        customer_text
+        if historical_chunks is None
+        else build_enriched_analysis_prompt(customer_text, historical_chunks)
+    )
     messages = [
         {
             "role": "system",
@@ -65,7 +75,7 @@ def analyze_account(customer_text):
         },
         {
             "role": "user",
-            "content": customer_text,
+            "content": user_content,
         },
     ]
 
@@ -135,3 +145,28 @@ Important:
             print(retry_raw_response)
 
             raise
+
+
+def answer_relationship_question(question, context):
+    client = get_client()
+    context_text = build_relationship_context(context)
+    response = client.chat.completions.create(
+        model=get_configured_model_name(),
+        messages=[
+            {"role": "system", "content": RELATIONSHIP_QA_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    "QUESTION:\n"
+                    f"{question}\n\n"
+                    "SUPPLIED RELATIONSHIP CONTEXT:\n"
+                    f"{context_text}"
+                ),
+            },
+        ],
+        temperature=0.1,
+    )
+    answer = response.choices[0].message.content
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("The answer provider returned no answer")
+    return answer.strip()

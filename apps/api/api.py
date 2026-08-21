@@ -12,8 +12,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 
-from apps.api.analyzer import analyze_account, get_configured_model_name
-from apps.api.embeddings import ingest_interaction_memory
+from apps.api.analyzer import (
+    analyze_account,
+    answer_relationship_question,
+    get_configured_model_name,
+)
+from apps.api.embeddings import ingest_interaction_memory, retrieve_relationship_context
+from apps.api.schemas import RelationshipAnswer, RelationshipQuestion, RelationshipSource
 
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -162,9 +167,28 @@ def analyze(
 
     enforce_rate_limit(user_id)
 
-    brief = analyze_account(
-        request.customer_text
-    )
+    historical_context = None
+    try:
+        historical_context = retrieve_relationship_context(
+            str(request.account_id),
+            request.customer_text,
+            auth.bearer_token,
+            match_count=3,
+        )
+        historical_context = [
+            chunk
+            for chunk in historical_context
+            if chunk.interaction_id != str(request.interaction_id)
+        ]
+    except Exception as error:
+        logger.warning(
+            "Historical context retrieval failed account_id=%s interaction_id=%s error_category=%s",
+            request.account_id,
+            request.interaction_id,
+            type(error).__name__,
+        )
+
+    brief = analyze_account(request.customer_text, historical_context)
 
     try:
         ingestion = ingest_interaction_memory(
@@ -191,3 +215,71 @@ def analyze(
         **brief.model_dump(),
         "model_used": get_configured_model_name(),
     }
+
+
+@app.post("/relationships/{account_id}/ask", response_model=RelationshipAnswer)
+def ask_relationship(
+    account_id: UUID,
+    request: RelationshipQuestion,
+    auth: AuthenticatedRequest = Depends(verify_supabase_token),
+):
+    user_id = auth.claims.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication subject",
+        )
+    enforce_rate_limit(user_id)
+
+    try:
+        context = retrieve_relationship_context(
+            str(account_id),
+            request.question,
+            auth.bearer_token,
+            match_count=5,
+        )
+    except Exception as error:
+        logger.warning(
+            "Relationship Q&A retrieval failed account_id=%s error_category=%s",
+            account_id,
+            type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Relationship context is temporarily unavailable",
+        )
+
+    if not context:
+        return RelationshipAnswer(
+            answer="There is insufficient evidence in this relationship's recorded interactions to answer that question.",
+            sources=[],
+            model_used=get_configured_model_name(),
+        )
+
+    try:
+        answer = answer_relationship_question(request.question, context)
+    except Exception as error:
+        logger.warning(
+            "Relationship Q&A answer failed account_id=%s error_category=%s",
+            account_id,
+            type(error).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Relationship answer is temporarily unavailable",
+        )
+
+    sources = [
+        RelationshipSource(
+            interaction_id=chunk.interaction_id,
+            created_at=chunk.created_at,
+            similarity=chunk.similarity,
+            excerpt=chunk.content[:240],
+        )
+        for chunk in context
+    ]
+    return RelationshipAnswer(
+        answer=answer,
+        sources=sources,
+        model_used=get_configured_model_name(),
+    )

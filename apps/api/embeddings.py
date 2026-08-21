@@ -1,6 +1,7 @@
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Optional
 
 import requests
@@ -16,6 +17,15 @@ CHUNK_OVERLAP_CHARS = 200
 @dataclass(frozen=True)
 class IngestionResult:
     chunks_created: int
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    id: str
+    interaction_id: str
+    content: str
+    similarity: float
+    created_at: str
 
 
 def chunk_text(
@@ -142,3 +152,74 @@ def ingest_interaction_memory(
     chunks = chunk_text(raw_text)
     embeddings = embed_chunks(chunks)
     return persist_chunks(account_id, interaction_id, chunks, embeddings, caller_jwt)
+
+
+def retrieve_relationship_context(
+    account_id: str,
+    query_text: str,
+    access_token: str,
+    match_count: int = 5,
+    min_date: Optional[datetime] = None,
+) -> list[RetrievedChunk]:
+    _validate_identifiers(account_id, account_id)
+    if not isinstance(query_text, str) or not query_text.strip():
+        raise ValueError("Query text must not be empty")
+    if len(query_text) > 10_000:
+        raise ValueError("Query text is too long")
+    if not access_token:
+        raise ValueError("Caller JWT is required")
+    if match_count < 1 or match_count > 10:
+        raise ValueError("Match count must be between 1 and 10")
+
+    query_embedding = embed_chunks([query_text])[0]
+    if len(query_embedding) != EMBEDDING_DIMENSION:
+        raise ValueError("Query embedding has an invalid vector dimension")
+    supabase_url = os.getenv("SUPABASE_URL")
+    publishable_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    if not supabase_url or not publishable_key:
+        raise ValueError("Supabase URL and publishable key are required")
+
+    response = requests.post(
+        f"{supabase_url.rstrip('/')}/rest/v1/rpc/match_chunks",
+        headers={
+            "apikey": publishable_key,
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "query_embedding": query_embedding,
+            "match_account_id": account_id,
+            "match_count": match_count,
+            "min_date": min_date.isoformat() if min_date else None,
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    if not isinstance(rows, list):
+        raise ValueError("Retrieval response must be a list")
+    rows = rows[:match_count]
+
+    retrieved: list[RetrievedChunk] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Retrieval row must be an object")
+        required_fields = {"id", "interaction_id", "content", "similarity", "created_at"}
+        if not required_fields.issubset(row):
+            raise ValueError("Retrieval row is missing required fields")
+        if not isinstance(row["content"], str) or not row["content"].strip():
+            raise ValueError("Retrieval content must be non-empty text")
+        try:
+            similarity = float(row["similarity"])
+        except (TypeError, ValueError) as error:
+            raise ValueError("Retrieval similarity must be numeric") from error
+        retrieved.append(
+            RetrievedChunk(
+                id=str(row["id"]),
+                interaction_id=str(row["interaction_id"]),
+                content=row["content"],
+                similarity=similarity,
+                created_at=str(row["created_at"]),
+            )
+        )
+    return retrieved

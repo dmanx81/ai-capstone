@@ -81,3 +81,19 @@ processed manually with the admin-only `scripts/backfill_embeddings.py`, which
 requires `SUPABASE_SERVICE_ROLE_KEY` and is never imported by the API request
 path. The API requires `OPENAI_API_KEY` and `SUPABASE_PUBLISHABLE_KEY`; it also
 supports optional `EMBEDDING_BASE_URL` and `EMBEDDING_MODEL` settings.
+
+## Session 7 - Relationship Q&A and Historical Context
+
+Relationship retrieval reuses the Session 6 embedding configuration and calls
+`public.match_chunks` once through PostgREST with the authenticated caller JWT.
+Q&A is exposed at `POST /relationships/{account_id}/ask`, uses at most five
+retrieved chunks, and builds bounded source excerpts directly from retrieved
+rows rather than asking the model to invent citations. Empty retrieval returns
+an insufficient-evidence response without an LLM call.
+
+The `/analyze` path now performs one best-effort historical retrieval of at most
+three chunks before analysis, filters out the current interaction, and labels
+the current interaction as primary while historical context remains
+supplementary. Retrieval failure falls back to current-only analysis. Both
+prompts explicitly treat retrieved text as untrusted data and reject embedded
+instructions; no migration was required.
