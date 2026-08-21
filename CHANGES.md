@@ -62,3 +62,22 @@ axis scrolls inside its own container on narrow screens, and the chart uses a
 responsive container. Renewal remains represented at the selected range edge
 when it falls outside that range. Mobile viewport validation was performed with
 the production build and narrow-layout browser check.
+
+## Session 6 - Relationship Memory Ingestion
+
+New interactions are chunked deterministically in the API at approximately 500
+tokens using 2,000-character chunks with 200-character overlap. Chunks are
+embedded with `text-embedding-3-small` at 1,536 dimensions and inserted through
+PostgREST with the caller's verified JWT, preserving the existing RLS policies.
+Each chunk stores its zero-based source order, and the unique interaction/order
+constraint plus deterministic delete/replace makes retries idempotent. It is
+best effort: embedding or memory persistence failures are logged by account and
+interaction ID without failing the primary analysis, brief, or extracted-item
+flow.
+
+The HNSW cosine index is defined in
+`supabase/migrations/006_chunks_vector_index.sql`. Existing interactions can be
+processed manually with the admin-only `scripts/backfill_embeddings.py`, which
+requires `SUPABASE_SERVICE_ROLE_KEY` and is never imported by the API request
+path. The API requires `OPENAI_API_KEY` and `SUPABASE_PUBLISHABLE_KEY`; it also
+supports optional `EMBEDDING_BASE_URL` and `EMBEDDING_MODEL` settings.

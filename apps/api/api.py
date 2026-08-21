@@ -1,7 +1,10 @@
 import os
 import threading
 import time
+import logging
+from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 import jwt
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -10,6 +13,7 @@ from jwt import PyJWKClient
 from pydantic import BaseModel, Field
 
 from apps.api.analyzer import analyze_account, get_configured_model_name
+from apps.api.embeddings import ingest_interaction_memory
 
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
@@ -24,6 +28,7 @@ RATE_LIMIT_REQUESTS = 30
 RATE_LIMIT_WINDOW_SECONDS = 60 * 60
 request_timestamps: dict[str, list[float]] = {}
 rate_limit_lock = threading.Lock()
+logger = logging.getLogger(__name__)
 
 
 app = FastAPI(
@@ -34,6 +39,14 @@ app = FastAPI(
 
 class AnalyzeRequest(BaseModel):
     customer_text: str = Field(min_length=40, max_length=50_000)
+    account_id: UUID
+    interaction_id: UUID
+
+
+@dataclass(frozen=True)
+class AuthenticatedRequest:
+    claims: dict
+    bearer_token: str
 
 
 def enforce_rate_limit(user_id: str) -> None:
@@ -96,7 +109,7 @@ def verify_supabase_token(
                 detail="Invalid authentication role",
             )
 
-        return payload
+        return AuthenticatedRequest(claims=payload, bearer_token=token)
 
     except HTTPException:
         raise
@@ -136,8 +149,9 @@ def health():
 @app.post("/analyze")
 def analyze(
     request: AnalyzeRequest,
-    claims: dict = Depends(verify_supabase_token),
+    auth: AuthenticatedRequest = Depends(verify_supabase_token),
 ):
+    claims = auth.claims
     user_id = claims.get("sub")
 
     if not isinstance(user_id, str) or not user_id:
@@ -151,6 +165,27 @@ def analyze(
     brief = analyze_account(
         request.customer_text
     )
+
+    try:
+        ingestion = ingest_interaction_memory(
+            str(request.account_id),
+            str(request.interaction_id),
+            request.customer_text,
+            auth.bearer_token,
+        )
+        logger.info(
+            "Interaction memory ingestion completed account_id=%s interaction_id=%s chunks=%d",
+            request.account_id,
+            request.interaction_id,
+            ingestion.chunks_created,
+        )
+    except Exception as error:
+        logger.warning(
+            "Interaction memory ingestion failed account_id=%s interaction_id=%s error_category=%s",
+            request.account_id,
+            request.interaction_id,
+            type(error).__name__,
+        )
 
     return {
         **brief.model_dump(),

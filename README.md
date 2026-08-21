@@ -35,6 +35,10 @@ public environment variables as appropriate:
 
 - `API_BASE_URL` - URL of the FastAPI service
 - `NEXT_PUBLIC_SUPABASE_URL` - Supabase project URL
+- `OPENAI_API_KEY` - API-side key for `text-embedding-3-small`
+- `EMBEDDING_BASE_URL` - optional OpenAI-compatible embeddings endpoint
+- `EMBEDDING_MODEL` - optional embeddings model, defaulting to `text-embedding-3-small`
+- `SUPABASE_PUBLISHABLE_KEY` - publishable Supabase key for caller-scoped API writes
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` - Supabase publishable key
 
 Production deployments must configure these values in the hosting platform

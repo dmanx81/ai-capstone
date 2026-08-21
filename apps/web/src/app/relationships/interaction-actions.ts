@@ -103,6 +103,8 @@ export async function createInteraction(formData: FormData) {
       },
       body: JSON.stringify({
         customer_text: rawText,
+        account_id: accountId,
+        interaction_id: interaction.id,
       }),
       cache: "no-store",
     });
