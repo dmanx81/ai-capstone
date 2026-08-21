@@ -19,6 +19,7 @@ from apps.api.analyzer import (
     answer_relationship_question,
     get_configured_model_name,
 )
+from apps.api import billing
 from apps.api.embeddings import retrieve_relationship_context
 from apps.api.schemas import RelationshipAnswer, RelationshipQuestion, RelationshipSource
 
@@ -371,3 +372,115 @@ def ask_relationship(
         sources=sources,
         model_used=get_configured_model_name(),
     )
+
+
+def _resolve_authenticated_user_id(auth: AuthenticatedRequest) -> str:
+    user_id = auth.claims.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication subject",
+        )
+    return user_id
+
+
+@app.post("/billing/checkout")
+def create_billing_checkout(auth: AuthenticatedRequest = Depends(verify_supabase_token)):
+    user_id = _resolve_authenticated_user_id(auth)
+    try:
+        checkout_url = billing.create_checkout_session(user_id)
+    except billing.BillingServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=billing.BILLING_UNAVAILABLE_REASON,
+        )
+    return {"checkout_url": checkout_url}
+
+
+@app.post("/billing/portal")
+def create_billing_portal(auth: AuthenticatedRequest = Depends(verify_supabase_token)):
+    user_id = _resolve_authenticated_user_id(auth)
+    try:
+        portal_url = billing.create_portal_session(user_id)
+    except billing.NoStripeCustomerError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="no_active_billing_customer",
+        )
+    except billing.BillingServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=billing.BILLING_UNAVAILABLE_REASON,
+        )
+    return {"portal_url": portal_url}
+
+
+@app.get("/billing/status")
+def get_billing_status(auth: AuthenticatedRequest = Depends(verify_supabase_token)):
+    user_id = _resolve_authenticated_user_id(auth)
+    try:
+        entitlement = billing.get_user_entitlement(user_id)
+    except billing.BillingServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=billing.BILLING_UNAVAILABLE_REASON,
+        )
+    return {
+        "plan": entitlement["plan"],
+        "status": entitlement["status"],
+        "usage_count": entitlement["usage_count"],
+        "monthly_analysis_allowance": entitlement["monthly_analysis_allowance"],
+        "remaining_usage": entitlement["remaining_usage"],
+        "period_start": entitlement["period_start"],
+        "period_end": entitlement["period_end"],
+    }
+
+
+@app.post("/billing/webhook")
+async def stripe_webhook(request: Request):
+    # No Supabase auth dependency here -- Stripe cannot send a Supabase JWT.
+    # The Stripe signature is the sole trust boundary for this route, so the
+    # raw body must be read before anything attempts to parse it as JSON.
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature")
+
+    try:
+        event = billing.verify_and_parse_stripe_event(payload, signature)
+    except billing.StripeWebhookNotConfiguredError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=billing.BILLING_UNAVAILABLE_REASON,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="invalid_stripe_signature",
+        )
+
+    try:
+        claim = billing.claim_stripe_webhook_event(event["id"], event["type"])
+        if claim["already_completed"]:
+            return {"status": "already_processed"}
+        if not claim["claimed"]:
+            # Another delivery is actively processing this event right now --
+            # retryable, not a success. A 2xx here would tell Stripe the
+            # delivery was handled when no mutation has happened for it.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="webhook_event_in_progress",
+            )
+
+        try:
+            billing.handle_stripe_webhook_event(event)
+        except billing.BillingServiceError:
+            billing.mark_stripe_webhook_event_failed(event["id"], billing.BILLING_UNAVAILABLE_REASON)
+            raise
+
+        billing.mark_stripe_webhook_event_completed(event["id"])
+    except billing.BillingServiceError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=billing.BILLING_UNAVAILABLE_REASON,
+        )
+
+    return {"status": "ok"}

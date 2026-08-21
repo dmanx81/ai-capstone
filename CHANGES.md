@@ -208,3 +208,56 @@ web lint/typecheck/build validation, and a git diff sanity pass. Live/manual
 acceptance remains required for a real malicious mismatch run, worker kill/restart
 recovery, queue-drain validation, and stale-job alert verification in a safe test
 environment.
+
+## Billing Entitlement Foundation
+
+Added the pre-Stripe billing/entitlement layer (`apps/api/billing.py`,
+`supabase/migrations/008_billing.sql`): a `user_billing` table with a
+select-own-only RLS policy (no authenticated insert/update/delete — a client
+can never self-promote to PRO or reset usage), and an authoritative
+entitlement helper shared by both `/analyze` and the async worker. The
+billable unit is defined as one unique interaction whose analysis reaches
+`analysis_status = 'complete'` within a deterministic UTC calendar-month
+window (Stripe's subscription period once populated), not a mutable counter
+— failed analyses and retries of an already-complete interaction both count
+zero additional usage. The worker enforces quota after account/interaction
+linkage validation and before the provider call; billing backend failures
+and unresolved account owners fail closed rather than granting default
+access. Full design and rationale are documented in `apps/api/BILLING.md`.
+
+## Stripe Test-Mode Billing Integration
+
+Wired real Stripe (test mode) into the entitlement foundation above, without
+touching the entitlement math itself: `Next.js server actions -> authenticated
+FastAPI /billing/* -> Stripe SDK` (official `stripe` Python package). Adds
+`POST /billing/checkout` and `POST /billing/portal` (both authenticated,
+no request body — the caller can never choose a price, plan, amount, or
+customer id), `GET /billing/status` (derived entitlement only, no Stripe IDs
+or secrets), and `POST /billing/webhook` (signature-verified via the official
+`stripe.Webhook.construct_event`, no custom cryptography).
+
+The Stripe customer -> Supabase user mapping is established at Checkout-
+session creation time under an authenticated session, never deferred to
+webhook metadata — `event.data.object.metadata` is never read to choose a
+webhook's mutation target anywhere in this codebase, so a forged
+`metadata.user_id` on an incoming event cannot promote a different account.
+Webhook idempotency is a claim/processed state machine
+(`supabase/migrations/009_stripe_webhook_events.sql`, mirroring the existing
+`claim_next_analysis_job()` pattern), not a single insert-and-skip: a claim
+that succeeds followed by a billing mutation that fails leaves the event
+retryable rather than silently marked done. Subscription reconciliation
+writes truthful raw Stripe state (customer/subscription/price ids, status,
+UTC-converted period bounds) and deliberately does not re-derive
+active/inactive — the existing, unchanged `_effective_plan_and_active()`
+still makes that call at read time.
+
+Settings gained a Billing card (plan, status, usage this period, remaining
+analyses, and an Upgrade/Manage-subscription button) backed entirely by
+server actions and the authenticated API — no Stripe code, secrets, or price
+IDs exist in the web app. 47 new regression tests cover webhook signature
+verification, the corrected claim-fail-retry-succeed-duplicate idempotency
+sequence, metadata distrust, price/status reconciliation, and checkout/
+portal/status authorization. Full Python and web validation passed. This
+integration has **not** been exercised against a real Stripe account —
+`apps/api/BILLING.md` documents the exact manual test-mode acceptance
+checklist still required before this is considered verified.
