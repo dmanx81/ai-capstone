@@ -29,6 +29,17 @@ type DashboardRelationship = PortfolioRow & {
   trend: "↑" | "↓" | "→" | "—";
 };
 
+type PortfolioActionRow = {
+  id: string;
+  account_id: string;
+  title: string;
+  owner: string | null;
+  due_date: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  relationship_name: string;
+};
+
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 function startOfToday() {
@@ -183,6 +194,55 @@ function isAtRisk(relationship: PortfolioRow) {
   return lowHealth || imminentRenewal;
 }
 
+function actionDueBucket(action: Pick<PortfolioActionRow, "due_date">, nowIso: string) {
+  if (!action.due_date) {
+    return 3;
+  }
+
+  const dueDate = new Date(`${action.due_date}T00:00:00Z`).getTime();
+  const now = new Date(nowIso).getTime();
+  const diffDays = Math.floor((dueDate - now) / DAY_IN_MS);
+
+  if (diffDays < 0) {
+    return 0;
+  }
+
+  if (diffDays <= 7) {
+    return 1;
+  }
+
+  if (diffDays <= 30) {
+    return 2;
+  }
+
+  return 4;
+}
+
+function comparePortfolioActions(
+  left: PortfolioActionRow,
+  right: PortfolioActionRow,
+  nowIso: string,
+) {
+  const bucketDifference = actionDueBucket(left, nowIso) - actionDueBucket(right, nowIso);
+  if (bucketDifference !== 0) {
+    return bucketDifference;
+  }
+
+  const leftDue = left.due_date ? new Date(`${left.due_date}T00:00:00Z`).getTime() : Number.POSITIVE_INFINITY;
+  const rightDue = right.due_date ? new Date(`${right.due_date}T00:00:00Z`).getTime() : Number.POSITIVE_INFINITY;
+  if (leftDue !== rightDue) {
+    return leftDue - rightDue;
+  }
+
+  const leftCreated = new Date(left.created_at).getTime();
+  const rightCreated = new Date(right.created_at).getTime();
+  if (leftCreated !== rightCreated) {
+    return leftCreated - rightCreated;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
 export default async function PortfolioPage({
   searchParams,
 }: PortfolioPageProps) {
@@ -243,6 +303,17 @@ export default async function PortfolioPage({
 
   if (failedAnalysisError) {
     throw new Error(`Failed to load interaction status summary: ${failedAnalysisError.message}`);
+  }
+
+  const { data: openActionRows, error: openActionError } = await supabase
+    .from("extracted_items")
+    .select("id, account_id, title, owner, due_date, created_at, resolved_at")
+    .eq("kind", "action")
+    .eq("status", "open")
+    .order("created_at", { ascending: true });
+
+  if (openActionError) {
+    throw new Error(`Failed to load open actions: ${openActionError.message}`);
   }
 
   const itemSummary = new Map<string, {
@@ -315,6 +386,15 @@ export default async function PortfolioPage({
   }
 
   const sortedRelationships = sortRelationships(relationships, sort);
+  const relationNameByAccount = new Map(
+    (portfolioRows ?? []).map((relationship) => [relationship.account_id, relationship.relationship_name])
+  );
+  const sortedOpenActions = [...(openActionRows ?? [])]
+    .map((action) => ({
+      ...action,
+      relationship_name: relationNameByAccount.get(action.account_id) ?? "Relationship",
+    }))
+    .sort((left, right) => comparePortfolioActions(left, right, nowIso));
   const attentionRelationships = relationships.filter((relationship) => {
     const signals = signalsByAccount.get(relationship.account_id) ?? [];
     return signals.some((signal) => signal.severity !== "info");
@@ -410,6 +490,56 @@ export default async function PortfolioPage({
                         +{extraCount} more
                       </p>
                     )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-8 rounded-xl border bg-white p-6">
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-xl font-medium">Action Center</h2>
+            <span className="text-sm text-gray-600">{sortedOpenActions.length} open</span>
+          </div>
+
+          {sortedOpenActions.length === 0 ? (
+            <p className="mt-4 text-gray-600">No open actions.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {sortedOpenActions.map((action) => {
+                const dueDate = action.due_date ? new Date(`${action.due_date}T00:00:00Z`) : null;
+                const nowDate = new Date(nowIso);
+                const diffDays = dueDate ? Math.floor((dueDate.getTime() - nowDate.getTime()) / DAY_IN_MS) : null;
+                const actionState = !dueDate
+                  ? "No due date"
+                  : diffDays !== null && diffDays < 0
+                    ? "OVERDUE"
+                    : diffDays !== null && diffDays <= 7
+                      ? "DUE SOON"
+                      : "UPCOMING";
+
+                return (
+                  <Link
+                    key={action.id}
+                    href={`/relationships/${action.account_id}`}
+                    className="block rounded-lg border p-4 transition hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-medium text-gray-900">{action.title}</p>
+                        <p className="mt-1 text-sm text-gray-600">{action.relationship_name}</p>
+                      </div>
+                      <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-gray-700">
+                        {actionState}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
+                      <span>Owner: <span className="font-medium text-gray-900">{action.owner ?? "Unassigned"}</span></span>
+                      <span>Due: <span className="font-medium text-gray-900">{action.due_date ?? "No due date"}</span></span>
+                      <span>Created: <span className="font-medium text-gray-900">{new Date(action.created_at).toISOString().slice(0, 10)}</span></span>
+                    </div>
                   </Link>
                 );
               })}

@@ -5,6 +5,7 @@ import { computeRelationshipSignals } from "@/lib/relationship-signals";
 import { createClient } from "@/lib/supabase/server";
 import {
   deleteRelationship,
+  updateActionItem,
   updateRelationship,
 } from "../actions";
 import { createInteraction, retryInteractionAnalysis } from "../interaction-actions";
@@ -20,6 +21,8 @@ type RelationshipPageProps = {
     error?: string;
   }>;
 };
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 type BriefContent = {
   executive_summary: string;
@@ -91,7 +94,7 @@ export default async function RelationshipPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("extracted_items")
-        .select("id, brief_id, kind, title, detail, severity, status, due_date, created_at, resolved_at")
+        .select("id, brief_id, kind, title, detail, owner, severity, status, due_date, created_at, resolved_at")
         .eq("account_id", id)
         .order("created_at", { ascending: true }),
     ]);
@@ -154,7 +157,14 @@ export default async function RelationshipPage({
     extractedItems?.filter((item) => item.kind === "opportunity") ?? [];
 
   const actions =
-    extractedItems?.filter((item) => item.kind === "action") ?? [];
+    [...(allExtractedItems ?? []).filter((item) => item.kind === "action")].sort((left, right) => {
+      const leftDate = left.due_date ? new Date(`${left.due_date}T00:00:00Z`).getTime() : Number.POSITIVE_INFINITY;
+      const rightDate = right.due_date ? new Date(`${right.due_date}T00:00:00Z`).getTime() : Number.POSITIVE_INFINITY;
+      if (leftDate !== rightDate) {
+        return leftDate - rightDate;
+      }
+      return new Date(left.created_at).getTime() - new Date(right.created_at).getTime();
+    });
 
   const openRisks = risks.filter((item) => item.status === "open").length;
   const highSeverityOpenRisks = risks.filter(
@@ -425,7 +435,7 @@ export default async function RelationshipPage({
 
               <section>
                 <h3 className="text-lg font-semibold">
-                  Action items
+                  Actions
                 </h3>
 
                 {actions.length === 0 ? (
@@ -434,22 +444,85 @@ export default async function RelationshipPage({
                   </p>
                 ) : (
                   <div className="mt-3 space-y-3">
-                    {actions.map((action) => (
-                      <div
-                        key={action.id}
-                        className="rounded-lg border p-4"
-                      >
-                        <p className="font-medium">
-                          {action.title}
-                        </p>
+                    {actions.map((action) => {
+                      const dueDateValue = action.due_date ?? "";
+                      const statusLabel = action.status === "resolved" ? "Completed" : "Open";
+                      const dueDays = action.due_date
+                        ? Math.floor((new Date(`${action.due_date}T00:00:00Z`).getTime() - new Date(nowIso).getTime()) / DAY_IN_MS)
+                        : null;
 
-                        {action.detail && (
-                          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">
-                            {action.detail}
-                          </p>
-                        )}
-                      </div>
-                    ))}
+                      return (
+                        <div key={action.id} className="rounded-lg border p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <p className="font-medium">{action.title}</p>
+                            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium uppercase tracking-wide text-gray-700">
+                              {statusLabel}
+                            </span>
+                          </div>
+
+                          <form action={updateActionItem} className="mt-4 space-y-3">
+                            <input type="hidden" name="id" value={action.id} />
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <label className="block text-sm font-medium text-gray-700">
+                                Owner
+                                <input
+                                  name="owner"
+                                  defaultValue={action.owner ?? ""}
+                                  placeholder="Unassigned"
+                                  className="mt-1 w-full rounded-md border px-3 py-2"
+                                />
+                              </label>
+
+                              <label className="block text-sm font-medium text-gray-700">
+                                Due date
+                                <input
+                                  name="due_date"
+                                  type="date"
+                                  defaultValue={dueDateValue}
+                                  className="mt-1 w-full rounded-md border px-3 py-2"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+                              <span>Created: {new Date(action.created_at).toISOString().slice(0, 10)}</span>
+                              {action.resolved_at && (
+                                <span>Resolved: {new Date(action.resolved_at).toISOString().slice(0, 10)}</span>
+                              )}
+                              {dueDays !== null && (
+                                <span>
+                                  {dueDays < 0 ? `${Math.abs(dueDays)} days overdue` : dueDays === 0 ? "Due today" : `Due in ${dueDays} days`}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              <button type="submit" className="rounded-md bg-black px-3 py-2 text-sm text-white">
+                                Save
+                              </button>
+                              <button type="submit" name="clear_due_date" value="true" className="rounded-md border bg-white px-3 py-2 text-sm">
+                                Clear due date
+                              </button>
+                              {action.status === "resolved" ? (
+                                <button type="submit" name="status" value="open" className="rounded-md border bg-white px-3 py-2 text-sm">
+                                  Reopen
+                                </button>
+                              ) : (
+                                <button type="submit" name="status" value="resolved" className="rounded-md border bg-white px-3 py-2 text-sm">
+                                  Mark resolved
+                                </button>
+                              )}
+                            </div>
+                          </form>
+
+                          {action.detail && (
+                            <p className="mt-2 whitespace-pre-wrap text-sm text-gray-600">
+                              {action.detail}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </section>
