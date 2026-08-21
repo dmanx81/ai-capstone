@@ -21,12 +21,12 @@ No raw relationship text or secrets are included here.
 
 ## Session 4 - Portfolio Dashboard
 
-The portfolio now reads from the `portfolio_overview` security-invoker view
-created in `supabase/migrations/005_portfolio_overview.sql`. The view aggregates
-one row per owned relationship with latest and previous non-null health scores,
-the most recent `interactions.occurred_at`, and open `risk`/`action` counts.
-The authenticated Supabase client makes one dashboard data round trip; all
-sorting and KPI derivation happens on the already-fetched dataset.
+The portfolio reads from three fixed queries without adding a new signals table
+or any migration churn: the `portfolio_overview` security-invoker view, the
+open extracted-item summary for risk/action counts, and the interaction status
+history to determine the newest analysis outcome per account. This stays in the
+same constant-query pattern and avoids N+1 calls while keeping the logic
+explainable and deterministic.
 
 Needs-attention sorting uses lowest available health first, then nearest renewal,
 then longest interaction silence. Missing health is ordered after known scores,

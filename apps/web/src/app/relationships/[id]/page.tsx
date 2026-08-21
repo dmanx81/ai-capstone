@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
+import { computeRelationshipSignals } from "@/lib/relationship-signals";
 import { createClient } from "@/lib/supabase/server";
 import {
   deleteRelationship,
@@ -90,7 +91,7 @@ export default async function RelationshipPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("extracted_items")
-        .select("id, brief_id, kind, title, detail, status, created_at, resolved_at")
+        .select("id, brief_id, kind, title, detail, severity, status, due_date, created_at, resolved_at")
         .eq("account_id", id)
         .order("created_at", { ascending: true }),
     ]);
@@ -123,6 +124,7 @@ export default async function RelationshipPage({
   }
 
   const latestBrief = briefs?.[0] ?? null;
+  const previousBrief = briefs?.[1] ?? null;
   const latestInteraction = interactions?.[0] ?? null;
   const nowIso = new Date().toISOString();
   const extractedItems = latestBrief
@@ -131,6 +133,7 @@ export default async function RelationshipPage({
 
   const briefContent = latestBrief?.content_json as BriefContent | undefined;
   const healthScore = latestBrief?.health_score ?? null;
+  const previousHealthScore = previousBrief?.health_score ?? null;
   const latestInteractionStatus = latestInteraction?.analysis_status ?? "complete";
   const latestInteractionError = latestInteraction?.analysis_error ?? null;
   const healthLabel =
@@ -152,6 +155,26 @@ export default async function RelationshipPage({
 
   const actions =
     extractedItems?.filter((item) => item.kind === "action") ?? [];
+
+  const openRisks = risks.filter((item) => item.status === "open").length;
+  const highSeverityOpenRisks = risks.filter(
+    (item) => item.status === "open" && item.severity === "high"
+  ).length;
+  const overdueActions = actions.filter(
+    (item) => item.status === "open" && item.due_date && new Date(`${item.due_date}T00:00:00Z`).getTime() < new Date(nowIso).getTime()
+  ).length;
+  const signals = computeRelationshipSignals({
+    account_id: relationship.id,
+    latest_health_score: healthScore,
+    previous_health_score: previousHealthScore,
+    renewal_date: relationship.renewal_date,
+    last_interaction_at: latestInteraction?.occurred_at ?? null,
+    open_risks: openRisks,
+    high_severity_open_risk_count: highSeverityOpenRisks,
+    overdue_action_count: overdueActions,
+    failed_analysis: latestInteractionStatus === "failed",
+    nowIso,
+  });
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -253,6 +276,28 @@ export default async function RelationshipPage({
               Save changes
             </button>
           </form>
+        </div>
+
+        <div className="mt-6 rounded-xl border bg-white p-8">
+          <h2 className="text-2xl font-semibold">Signals</h2>
+
+          {signals.length === 0 ? (
+            <p className="mt-3 text-gray-600">No current signals for this relationship.</p>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {signals.map((signal) => (
+                <div key={signal.id} className="rounded-lg border border-gray-200 p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      {signal.severity}
+                    </span>
+                    <span className="text-sm font-medium text-gray-500">{signal.title}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-gray-700">{signal.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-6 rounded-xl border bg-white p-8">

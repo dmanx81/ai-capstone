@@ -2,6 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { logout } from "@/app/auth/actions";
+import {
+  computeRelationshipSignals,
+  type RelationshipSignal,
+} from "@/lib/relationship-signals";
 import { createClient } from "@/lib/supabase/server";
 
 type PortfolioPageProps = {
@@ -196,6 +200,8 @@ export default async function PortfolioPage({
     redirect("/auth/login");
   }
 
+  const nowIso = new Date().toISOString();
+
   const { data: portfolioRows, error } = await supabase
     .from("portfolio_overview")
     .select(
@@ -220,7 +226,99 @@ export default async function PortfolioPage({
               : "→",
     })
   );
+
+  const { data: itemSummaryRows, error: itemSummaryError } = await supabase
+    .from("extracted_items")
+    .select("account_id, kind, status, severity, due_date")
+    .eq("status", "open");
+
+  if (itemSummaryError) {
+    throw new Error(`Failed to load open item summary: ${itemSummaryError.message}`);
+  }
+
+  const { data: failedAnalysisRows, error: failedAnalysisError } = await supabase
+    .from("interactions")
+    .select("account_id, analysis_status, occurred_at")
+    .order("occurred_at", { ascending: false });
+
+  if (failedAnalysisError) {
+    throw new Error(`Failed to load interaction status summary: ${failedAnalysisError.message}`);
+  }
+
+  const itemSummary = new Map<string, {
+    high_severity_open_risk_count: number;
+    overdue_action_count: number;
+    open_risks: number;
+  }>();
+
+  for (const item of itemSummaryRows ?? []) {
+    const key = item.account_id;
+    const current = itemSummary.get(key) ?? {
+      high_severity_open_risk_count: 0,
+      overdue_action_count: 0,
+      open_risks: 0,
+    };
+
+    if (item.kind === "risk") {
+      current.open_risks += 1;
+      if (item.severity === "high") {
+        current.high_severity_open_risk_count += 1;
+      }
+    }
+
+    if (
+      item.kind === "action"
+      && item.status === "open"
+      && item.due_date
+      && new Date(`${item.due_date}T00:00:00Z`).getTime() < new Date(nowIso).getTime()
+    ) {
+      current.overdue_action_count += 1;
+    }
+
+    itemSummary.set(key, current);
+  }
+
+  const latestFailedAnalysisByAccount = new Map<string, boolean>();
+  for (const interaction of failedAnalysisRows ?? []) {
+    if (latestFailedAnalysisByAccount.has(interaction.account_id)) {
+      continue;
+    }
+
+    latestFailedAnalysisByAccount.set(
+      interaction.account_id,
+      interaction.analysis_status === "failed"
+    );
+  }
+
+  const signalsByAccount = new Map<string, RelationshipSignal[]>();
+  for (const relationship of relationships) {
+    const summary = itemSummary.get(relationship.account_id) ?? {
+      high_severity_open_risk_count: 0,
+      overdue_action_count: 0,
+      open_risks: 0,
+    };
+
+    const signals = computeRelationshipSignals({
+      account_id: relationship.account_id,
+      latest_health_score: relationship.latest_health_score,
+      previous_health_score: relationship.previous_health_score,
+      renewal_date: relationship.renewal_date,
+      last_interaction_at: relationship.last_interaction_at,
+      open_risks: summary.open_risks,
+      high_severity_open_risk_count: summary.high_severity_open_risk_count,
+      overdue_action_count: summary.overdue_action_count,
+      failed_analysis: latestFailedAnalysisByAccount.get(relationship.account_id) ?? false,
+      nowIso,
+    });
+
+    signalsByAccount.set(relationship.account_id, signals);
+  }
+
   const sortedRelationships = sortRelationships(relationships, sort);
+  const attentionRelationships = relationships.filter((relationship) => {
+    const signals = signalsByAccount.get(relationship.account_id) ?? [];
+    return signals.some((signal) => signal.severity !== "info");
+  });
   const atRiskCount = relationships.filter(isAtRisk).length;
   const openActionCount = relationships.reduce(
     (total, relationship) => total + relationship.open_actions,
@@ -270,8 +368,57 @@ export default async function PortfolioPage({
           ))}
         </div>
 
+        <div className="mt-8 rounded-xl border bg-white p-6">
+          <h2 className="text-xl font-medium">Attention Center</h2>
+
+          {attentionRelationships.length === 0 ? (
+            <p className="mt-4 text-gray-600">No relationships currently need attention.</p>
+          ) : (
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {attentionRelationships.slice(0, 6).map((relationship) => {
+                const relationshipSignals = signalsByAccount.get(relationship.account_id) ?? [];
+                const topSignal = relationshipSignals[0] ?? null;
+                const extraCount = Math.max(0, relationshipSignals.length - 1);
+
+                return (
+                  <Link
+                    key={relationship.account_id}
+                    href={`/relationships/${relationship.account_id}`}
+                    className="block rounded-lg border p-4 transition hover:border-gray-300 hover:bg-gray-50"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-gray-900">{relationship.relationship_name}</p>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {relationship.latest_health_score ?? "—"} / 100
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium uppercase tracking-wide text-gray-700">
+                        {topSignal?.severity ?? "info"}
+                      </span>
+                    </div>
+
+                    <p className="mt-3 text-sm font-medium text-gray-800">
+                      {topSignal?.title ?? "Needs attention"}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {topSignal?.detail ?? "Review this relationship."}
+                    </p>
+
+                    {extraCount > 0 && (
+                      <p className="mt-2 text-xs font-medium text-gray-500">
+                        +{extraCount} more
+                      </p>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="mt-8 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-medium">Relationships needing attention</h2>
+          <h2 className="text-xl font-medium">All relationships</h2>
           <nav aria-label="Portfolio sort" className="flex gap-2 text-sm">
             {[
               ["attention", "Needs attention"],
