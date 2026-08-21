@@ -1,13 +1,16 @@
+import json
+import logging
 import os
 import threading
 import time
-import logging
+import uuid
 from dataclasses import dataclass
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 import jwt
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWKClient
 from pydantic import BaseModel, Field
@@ -33,13 +36,120 @@ RATE_LIMIT_REQUESTS = 30
 RATE_LIMIT_WINDOW_SECONDS = 60 * 60
 request_timestamps: dict[str, list[float]] = {}
 rate_limit_lock = threading.Lock()
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("apps.api")
+
+
+def configure_sentry():
+    dsn = os.getenv("SENTRY_DSN")
+    if not dsn:
+        return None
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=dsn,
+            environment=os.getenv("APP_ENV", "development"),
+            send_default_pii=False,
+            traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.0")),
+            attach_stacktrace=False,
+        )
+        return sentry_sdk
+    except Exception:  # pragma: no cover
+        logger.warning("Sentry configuration is unavailable; continuing without it")
+        return None
+
+
+configure_sentry()
+
+
+def _safe_log_value(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, dict):
+        return {str(k): _safe_log_value(v) for k, v in value.items() if k not in {"customer_text", "raw_text", "prompt", "jwt", "token", "authorization"}}
+    if isinstance(value, (list, tuple)):
+        return [_safe_log_value(v) for v in value]
+    return str(value)
+
+
+def build_request_log_fields(
+    *,
+    request_id: str,
+    path: str,
+    method: str,
+    account_id: Optional[str] = None,
+    interaction_id: Optional[str] = None,
+    user_id: Optional[str] = None,
+    duration_ms: int,
+    status_code: int,
+    request_meta: Optional[dict[str, Any]] = None,
+    request_body: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    fields = {
+        "request_id": request_id,
+        "path": path,
+        "method": method,
+        "duration_ms": duration_ms,
+        "status_code": status_code,
+        "account_id": account_id,
+        "interaction_id": interaction_id,
+        "user_id": user_id,
+        "meta": _safe_log_value(request_meta or {}),
+    }
+    if request_body:
+        fields["body"] = {
+            key: _safe_log_value(value)
+            for key, value in request_body.items()
+            if key not in {"customer_text", "raw_text", "prompt", "jwt", "token", "authorization"}
+        }
+    return fields
+
+
+def cors_allows_credentials_with_wildcard() -> bool:
+    allowed_origins = os.getenv("ALLOWED_ORIGINS", "").split(",")
+    return any(origin.strip() == "*" for origin in allowed_origins) and os.getenv("ALLOW_CREDENTIALS", "false").lower() == "true"
 
 
 app = FastAPI(
     title="AI Capstone API",
     version="1.0.0",
 )
+
+allowed_origins = [origin.strip() for origin in os.getenv("ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
+
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    request_id = request.headers.get("x-request-id") or str(uuid.uuid4())
+    response = await call_next(request)
+    elapsed_ms = round((time.perf_counter() - started) * 1000)
+    logger.info(
+        "http_request",
+        extra={
+            **build_request_log_fields(
+                request_id=request_id,
+                path=request.url.path,
+                method=request.method,
+                duration_ms=elapsed_ms,
+                status_code=response.status_code,
+                request_meta={"endpoint": request.url.path},
+            )
+        },
+    )
+    response.headers["x-request-id"] = request_id
+    return response
 
 
 class AnalyzeRequest(BaseModel):
@@ -146,9 +256,18 @@ def verify_supabase_token(
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready():
+    missing = []
+    for env_name in ("SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"):
+        if not os.getenv(env_name):
+            missing.append(env_name)
+    if missing:
+        return {"status": "not_ready", "missing": missing}
+    return {"status": "ready"}
 
 
 @app.post("/analyze")
@@ -166,6 +285,8 @@ def analyze(
         )
 
     enforce_rate_limit(user_id)
+    request_id = str(uuid.uuid4())
+    started = time.perf_counter()
 
     historical_context = None
     try:
@@ -182,13 +303,30 @@ def analyze(
         ]
     except Exception as error:
         logger.warning(
-            "Historical context retrieval failed account_id=%s interaction_id=%s error_category=%s",
-            request.account_id,
-            request.interaction_id,
-            type(error).__name__,
+            "historical_context_retrieval_failed",
+            extra={**build_request_log_fields(
+                request_id=request_id,
+                path="/analyze",
+                method="POST",
+                account_id=str(request.account_id),
+                interaction_id=str(request.interaction_id),
+                user_id=user_id,
+                duration_ms=round((time.perf_counter() - started) * 1000),
+                status_code=200,
+                request_meta={"error_category": type(error).__name__},
+            )},
         )
 
-    brief = analyze_account(request.customer_text, historical_context)
+    analyze_result = analyze_account(
+        request.customer_text,
+        historical_context,
+        return_model_used=True,
+    )
+    if isinstance(analyze_result, tuple):
+        brief, model_used = analyze_result
+    else:
+        brief = analyze_result
+        model_used = get_configured_model_name()
 
     try:
         ingestion = ingest_interaction_memory(
@@ -198,23 +336,51 @@ def analyze(
             auth.bearer_token,
         )
         logger.info(
-            "Interaction memory ingestion completed account_id=%s interaction_id=%s chunks=%d",
-            request.account_id,
-            request.interaction_id,
-            ingestion.chunks_created,
+            "interaction_memory_ingestion_completed",
+            extra={**build_request_log_fields(
+                request_id=request_id,
+                path="/analyze",
+                method="POST",
+                account_id=str(request.account_id),
+                interaction_id=str(request.interaction_id),
+                user_id=user_id,
+                duration_ms=round((time.perf_counter() - started) * 1000),
+                status_code=200,
+                request_meta={"chunks_created": ingestion.chunks_created, "model_used": model_used},
+            )},
         )
     except Exception as error:
         logger.warning(
-            "Interaction memory ingestion failed account_id=%s interaction_id=%s error_category=%s",
-            request.account_id,
-            request.interaction_id,
-            type(error).__name__,
+            "interaction_memory_ingestion_failed",
+            extra={**build_request_log_fields(
+                request_id=request_id,
+                path="/analyze",
+                method="POST",
+                account_id=str(request.account_id),
+                interaction_id=str(request.interaction_id),
+                user_id=user_id,
+                duration_ms=round((time.perf_counter() - started) * 1000),
+                status_code=200,
+                request_meta={"error_category": type(error).__name__, "model_used": model_used},
+            )},
         )
 
-    return {
-        **brief.model_dump(),
-        "model_used": get_configured_model_name(),
-    }
+    payload = {**brief.model_dump(), "model_used": model_used}
+    logger.info(
+        "analysis_completed",
+        extra={**build_request_log_fields(
+            request_id=request_id,
+            path="/analyze",
+            method="POST",
+            account_id=str(request.account_id),
+            interaction_id=str(request.interaction_id),
+            user_id=user_id,
+            duration_ms=round((time.perf_counter() - started) * 1000),
+            status_code=200,
+            request_meta={"model_used": model_used},
+        )},
+    )
+    return payload
 
 
 @app.post("/relationships/{account_id}/ask", response_model=RelationshipAnswer)
@@ -240,9 +406,17 @@ def ask_relationship(
         )
     except Exception as error:
         logger.warning(
-            "Relationship Q&A retrieval failed account_id=%s error_category=%s",
-            account_id,
-            type(error).__name__,
+            "relationship_qa_retrieval_failed",
+            extra={**build_request_log_fields(
+                request_id=str(uuid.uuid4()),
+                path=f"/relationships/{account_id}/ask",
+                method="POST",
+                account_id=str(account_id),
+                user_id=user_id,
+                duration_ms=0,
+                status_code=503,
+                request_meta={"error_category": type(error).__name__},
+            )},
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

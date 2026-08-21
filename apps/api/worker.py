@@ -13,6 +13,11 @@ from apps.api.embeddings import ingest_interaction_memory, retrieve_relationship
 logger = logging.getLogger("analysis_worker")
 
 
+def _job_log_fields(job_id: Any, **kwargs: Any) -> dict[str, Any]:
+    payload = {"job_id": str(job_id), **kwargs}
+    return {key: value for key, value in payload.items() if value is not None}
+
+
 def sanitize_analysis_error(raw_error: Any) -> str:
     message = str(raw_error) if raw_error is not None else "Unknown analysis failure"
     redacted = message
@@ -293,6 +298,10 @@ def process_job(job: dict[str, Any], supabase_url: str, service_token: str) -> d
     interaction = fetch_interaction(supabase_url, service_token, interaction_id)
     if not interaction:
         update_job_status(supabase_url, service_token, str(job["id"]), "failed", "Interaction no longer exists", attempts=int(job.get("attempts", 0)))
+        logger.warning(
+            "job_missing_interaction",
+            extra={**_job_log_fields(job.get("id"), interaction_id=interaction_id, account_id=account_id, analysis_status="failed", attempts=int(job.get("attempts", 0)))},
+        )
         return {"success": False, "interaction_id": interaction_id, "status": "failed"}
 
     interaction_account_id = getattr(interaction, "account_id", None)
@@ -315,6 +324,10 @@ def process_job(job: dict[str, Any], supabase_url: str, service_token: str) -> d
             "failed",
             last_error=safe_error,
             attempts=attempts_value,
+        )
+        logger.warning(
+            "job_account_mismatch",
+            extra={**_job_log_fields(job.get("id"), interaction_id=interaction_id, account_id=account_id, interaction_account_id=str(interaction_account_id) if interaction_account_id is not None else None, analysis_status="failed", attempts=attempts_value)},
         )
         return {"success": False, "interaction_id": interaction_id, "status": "failed", "error": safe_error}
 
@@ -361,10 +374,8 @@ def process_job(job: dict[str, Any], supabase_url: str, service_token: str) -> d
     except Exception as error:
         safe_error = sanitize_analysis_error(error)
         logger.warning(
-            "Analysis failed account_id=%s interaction_id=%s error_category=%s",
-            account_id,
-            interaction_id,
-            type(error).__name__,
+            "analysis_failed",
+            extra={**_job_log_fields(job.get("id"), account_id=account_id, interaction_id=interaction_id, analysis_status="failed", error_category=type(error).__name__, attempts=attempts_value)},
             exc_info=True,
         )
         completed_at = datetime.now(timezone.utc).isoformat()

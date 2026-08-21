@@ -137,3 +137,35 @@ PYTHONPATH=. python -m apps.api.worker --poll-interval 5
 
 Validation includes the async-analysis worker test cases, Python compile checks,
 web lint/typecheck/build verification, and the generated shared contract check.
+
+## Session 10 - Hardening and Observability
+
+Session 10 adds the production-ready hardening layer without changing the user
+model or weakening the security boundary. Structured FastAPI request logging now
+tracks request IDs, endpoint metadata, account and interaction IDs, status code,
+and run duration while deliberately omitting raw request text, prompts, JWTs, and
+provider secrets from the log payload. The worker emits job-scoped correlation
+fields so queued and failed jobs are traceable through the background pipeline.
+
+The Python provider layer gains bounded timeout and retry controls with a small,
+environment-configurable fallback model chain. The configured model and any
+fallback model are logged as `model_used` only after a successful call, and retry
+logic is limited to transient failures instead of repeated indefinite loops.
+
+The web app includes a minimal, environment-driven Sentry setup that is disabled
+cleanly when no DSN is configured, and the Next.js app also adds conservative
+security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy,
+Permissions-Policy, and HSTS in production). Plausible is included only when a
+configured domain is present; no relationship names, customer text, or IDs are
+sent in the analytics payload.
+
+The API CORS policy is explicit and environment-based rather than wildcard with
+credentials. The FastAPI app also adds a lightweight `/ready` endpoint for config
+sanity checks, while `/health` remains a safe process-status check. Session 10
+adds an operations runbook covering backups, worker incidents, embedding
+provider outages, and a rollback/deployment plan.
+
+This session intentionally does not add migration changes, does not weaken RLS,
+and does not expose service-role or provider secrets to browser-side code. The
+repository remains on the safe baseline while preparing for safer production
+operations and clearer incident response.
