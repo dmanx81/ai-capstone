@@ -261,3 +261,94 @@ portal/status authorization. Full Python and web validation passed. This
 integration has **not** been exercised against a real Stripe account —
 `apps/api/BILLING.md` documents the exact manual test-mode acceptance
 checklist still required before this is considered verified.
+
+## Session 11 - Public Landing and Legal Pages
+
+Built the first public marketing surface for the product: a landing page at
+`/`, and draft `/terms`, `/privacy`, `/impressum` pages, under a new
+`apps/web/src/app/(marketing)/` route group with its own lightweight
+header/footer/typography — the authenticated application shell, auth flow,
+Supabase client, API, worker, migrations, billing logic, and existing CSP/
+security headers were not touched. `apps/web/src/app/page.tsx` (previously
+an unconditional redirect to `/auth/login` or `/portfolio`) was removed and
+its logic moved into `(marketing)/page.tsx`, since a route group cannot
+coexist with a top-level file both claiming `/`: authenticated visitors
+still redirect to `/portfolio`; logged-out visitors now see the landing
+page instead of being sent straight to the login form.
+
+The landing page is written for Account Managers and CSMs specifically —
+"turn every customer conversation into a clear next move" — and deliberately
+avoids generic enterprise-suite language (no "360-degree view," "single
+source of truth," or "AI-powered platform" framing). Typography (Manrope
+display / Inter body) loads via `next/font/google`, scoped to the marketing
+route group only; this self-hosts the font files and requires no CSP change,
+since `next.config.ts` already restricts `font-src` to `'self'`. The one
+signature visual motif — a restrained "relationship signal trace" line with
+a few nodes — appears once, near the hero, and respects
+`prefers-reduced-motion` via Tailwind's `motion-safe:` variant. No
+testimonials, customer logos, usage counts, or other social proof were
+added, since none exist in this repository to draw from.
+
+`https://try.vitally.io/csm-platform/` was fetched once as a structural/
+conversion reference only (section pacing, CTA placement, hero-first value
+prop) — no headline, body copy, CTA wording, illustration, or brand
+treatment from that page was reused; this build's self-serve pricing/CTA
+model and prominent real screenshot are deliberate divergences from what
+was observed there (a gated demo-request page with de-emphasized
+screenshots).
+
+Every factual claim on the landing page and in the legal drafts was checked
+against the code before being written, not assumed:
+
+- **Pricing** reads the real allowances from `apps/api/billing.py`
+  (`DEFAULT_FREE_ALLOWANCE = 5`, `DEFAULT_PRO_ALLOWANCE = 1000`) into a
+  small marketing constants module — FREE is described as "per calendar
+  month" (`billing._calendar_month_period_utc()` is a fixed UTC month);
+  PRO is described as "per billing period," not "/month," because
+  `billing._resolve_billing_period()` uses Stripe's
+  `current_period_start`/`current_period_end` for an active subscription
+  when present, and nothing in the repo fixes the configured
+  `STRIPE_PRO_PRICE_ID` to a monthly interval.
+- **Export/delete FAQ copy** says "export a relationship" and describes
+  per-relationship delete, matching the real
+  `apps/web/src/app/api/relationships/[id]/export/route.ts` route and
+  `deleteRelationship` action exactly — there is no account-wide export or
+  deletion in this codebase, so the FAQ never says "export all my data."
+- **Portfolio-value copy** names only signals `apps/api/signal_rules.py`
+  actually computes: health decline, renewal pressure, overdue actions,
+  open risks.
+- **Privacy Policy processor list** was built by reading the code, not
+  from the session brief's suggestion list: Supabase, an LLM provider via
+  OpenRouter, an OpenAI-compatible embeddings API, Stripe (hosted
+  Checkout/Portal only), Plausible (conditional on
+  `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`, no custom `trackEvent` calls exist
+  anywhere in `apps/web/src`), and Sentry (conditional on `SENTRY_DSN`,
+  redacted per `sentry-privacy.ts`). The FAQ and Privacy Policy state
+  precisely that customer notes/conversation text/relationship names/
+  custom payloads are not sent to Plausible — not that Plausible receives
+  no content at all, since standard pageview/location data still flows
+  through its script when configured. Nothing claims EU-only processing or
+  hosting; the repo cannot establish that for OpenRouter, the embeddings
+  provider, or the Supabase project's region.
+- **Impressum** is drafted under the current German §5 DDG framework, with
+  an explicit note that DDG (not the former TMG) is the correct current
+  basis.
+
+The `public/screenshot-portfolio.png` asset does not exist yet. The landing
+page checks for it on disk at request time and renders a labeled "Portfolio
+screenshot pending" placeholder instead of a broken `<Image>` — dropping the
+real file in later requires no code change. `PRO_PRICE_DISPLAY` is a
+`// TODO`-marked placeholder constant (`€__ / billing period`); no
+commercial price was invented. Every legal page opens with a visible draft
+banner plus the required `{/* DRAFT — requires legal review before public
+launch */}` source marker, and all facts the repository cannot establish
+(entity name, address, VAT id, governing law, legal basis, international
+transfer mechanism, supervisory authority, and similar) are left as literal
+`{{PLACEHOLDER}}` tokens rather than invented.
+
+Validation performed: `npm run lint`, `npx tsc --noEmit`, and `npm run
+build` from `apps/web`, all passing; `git diff` confirms `next.config.ts`
+and `globals.css` are untouched. **None of the legal drafts have been
+reviewed by counsel, the PRO price is still undecided, and the product
+screenshot still needs to be supplied** — none of this is production-ready
+copy or a finished legal position.
