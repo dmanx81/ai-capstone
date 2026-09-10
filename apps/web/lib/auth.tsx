@@ -21,10 +21,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
+    const refresh = useCallback(async () => {
     try {
       const data = await api<Session>("/auth/me");
-      setSession(data);
+      setSession(data.user ? data : null);
     } catch {
       setSession(null);
     } finally {

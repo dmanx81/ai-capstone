@@ -44,3 +44,6 @@ npm-debug.log*
 # ide
 .idea/
 .vscode/
+
+# agent scratch
+agent-tools/

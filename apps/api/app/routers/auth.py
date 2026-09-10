@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -11,8 +11,10 @@ from app.schemas import LoginIn, OrgCreate, ProfileUpdate, RegisterIn
 from app.security import (
     clear_session_cookie,
     create_token,
+    decode_token,
     hash_password,
     set_session_cookie,
+    token_from_request,
     verify_password,
 )
 from app.seed import slugify
@@ -89,7 +91,17 @@ def logout(response: Response) -> dict:
 
 
 @router.get("/me")
-def me(db: Session = Depends(get_db), user: User = Depends(get_current_user)) -> dict:
+def me(request: Request, db: Session = Depends(get_db)) -> dict:
+    token = token_from_request(request)
+    if not token:
+        return {"user": None, "organization": None, "role": None, "memberships": []}
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return {"user": None, "organization": None, "role": None, "memberships": []}
+    user = db.get(User, payload.get("sub"))
+    if not user:
+        return {"user": None, "organization": None, "role": None, "memberships": []}
     member = db.query(OrgMember).filter(OrgMember.user_id == user.id).first()
     org = db.get(Organization, member.org_id) if member else None
     return _session_payload(db, user, org, member.role if member else None)

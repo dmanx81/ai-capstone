@@ -37,7 +37,7 @@ export default function OnboardingPage() {
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6">
         <h1 className="text-xl font-semibold">Name your workspace</h1>
         <p className="text-sm text-muted-foreground">
-          {session?.user.full_name ? `Welcome, ${session.user.full_name}. ` : ""}
+          {session?.user?.full_name ? `Welcome, ${session.user.full_name}. ` : ""}
           Accounts, contacts, and intelligence stay inside this organization.
         </p>
         <Field label="Workspace">

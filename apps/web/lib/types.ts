@@ -24,7 +24,7 @@ export type Membership = {
 };
 
 export type Session = {
-  user: User;
+  user: User | null;
   organization: Organization | null;
   role: string | null;
   memberships: Membership[];

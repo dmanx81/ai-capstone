@@ -24,7 +24,8 @@ def test_register_login_and_me(client):
 
     client.post("/api/v1/auth/logout")
     logged_out = client.get("/api/v1/auth/me")
-    assert logged_out.status_code == 401
+    assert logged_out.status_code == 200
+    assert logged_out.json()["user"] is None
 
 
 def test_demo_login(client):

@@ -15,14 +15,14 @@ import type { BillingStatus } from "@/lib/types";
 
 export default function SettingsPage() {
   const { session, refresh } = useAuth();
-  const [name, setName] = useState(session?.user.full_name ?? "");
-  const [title, setTitle] = useState(session?.user.title ?? "");
+  const [name, setName] = useState(session?.user?.full_name ?? "");
+  const [title, setTitle] = useState(session?.user?.title ?? "");
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [members, setMembers] = useState<{ full_name: string; email: string; role: string }[]>([]);
 
   useEffect(() => {
-    setName(session?.user.full_name ?? "");
-    setTitle(session?.user.title ?? "");
+    setName(session?.user?.full_name ?? "");
+    setTitle(session?.user?.title ?? "");
   }, [session]);
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function SettingsPage() {
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Account manager" />
               </Field>
               <Field label="Email">
-                <Input value={session?.user.email ?? ""} disabled />
+                <Input value={session?.user?.email ?? ""} disabled />
               </Field>
               <Button type="submit" className="w-fit">
                 Save profile

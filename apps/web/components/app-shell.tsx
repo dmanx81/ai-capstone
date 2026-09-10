@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Building2, LayoutDashboard, ListChecks, LogOut, Menu, Settings2 } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -70,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <NavLinks onNavigate={() => setOpen(false)} />
       </div>
       <div className="border-t p-3">
-        <div className="mb-2 truncate px-1 text-xs text-muted-foreground">{session?.user.email}</div>
+        <div className="mb-2 truncate px-1 text-xs text-muted-foreground">{session?.user?.email}</div>
         <Button variant="ghost" className="w-full justify-start" onClick={onLogout}>
           <LogOut className="size-4" />
           Sign out
@@ -88,7 +88,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             Relia
           </Link>
           <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger render={<Button variant="outline" size="icon-sm" />}>
+            <SheetTrigger className={cn(buttonVariants({ variant: "outline", size: "icon-sm" }))}>
               <Menu className="size-4" />
             </SheetTrigger>
             <SheetContent side="left" className="p-0">
