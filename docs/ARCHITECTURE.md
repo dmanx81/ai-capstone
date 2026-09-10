@@ -64,9 +64,10 @@ Plans in `app/config.py` (`free`, `starter`, `growth`) gate account count and mo
 |------|---------|
 | `/` | Marketing landing |
 | `/product` | Product, workflow, AI, in-product preview |
-| `/use-cases` | Customer Success, Account Management, Sales |
+| `/use-cases` | Customer Success, Account Management, Sales, Leadership |
 | `/pricing` | Free / Starter / Growth |
 | `/security` | Tenancy, RLS, roles, secrets |
+| `/privacy`, `/terms` | Public legal/product documentation |
 | `/login`, `/signup`, `/onboarding`, `/invite/[token]` | Auth and invitations |
 | `/dashboard` | “What should I focus on today?” |
 | `/accounts`, `/accounts/new`, `/accounts/[id]` | CRM + timeline + intelligence |

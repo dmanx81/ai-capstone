@@ -26,7 +26,13 @@ const HEALTH = [
 
 const HEALTH_TOTAL = HEALTH.reduce((sum, row) => sum + row.count, 0);
 
-function AppChrome({ children, subtitle }: { children: ReactNode; subtitle: string }) {
+const TIMELINE = [
+  { type: "call", title: "Working session on SSO blockers", detail: "Marcus restated that production SSO is blocked on IdP metadata." },
+  { type: "meeting", title: "August QBR", detail: "Priya requested regional expansion scope for Dayton, Toledo, and Akron." },
+  { type: "note", title: "SSO due date missed", detail: "We missed the committed SSO date. Customer still owes IdP metadata." },
+];
+
+export function AppChrome({ children, subtitle }: { children: ReactNode; subtitle: string }) {
   return (
     <div className="overflow-hidden rounded-xl border bg-sidebar shadow-sm">
       <div className="flex items-center gap-3 border-b px-4 py-3">
@@ -77,6 +83,146 @@ export function HeroPreview() {
   );
 }
 
+export function TimelinePreview() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Relationship timeline</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {TIMELINE.map((item) => (
+          <div key={item.title} className="rounded-lg border p-3">
+            <div className="flex items-center gap-2">
+              <Pill>{item.type}</Pill>
+              <div className="text-sm font-medium">{item.title}</div>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function IntelligencePreview() {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Risks</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="flex items-start justify-between gap-2 rounded-lg border p-3">
+            <span>SSO implementation slipped six weeks</span>
+            <SeverityBadge severity="high" />
+          </div>
+          <div className="flex items-start justify-between gap-2 rounded-lg border p-3">
+            <span>Champion may leave</span>
+            <SeverityBadge severity="high" />
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Opportunities &amp; commitments</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <div className="rounded-lg border p-3">
+            <div className="font-medium">Dayton / Toledo / Akron expansion</div>
+            <div className="mt-1 text-xs text-muted-foreground">Pursuing · requested at the August QBR</div>
+          </div>
+          <div className="rounded-lg border p-3">
+            <div className="font-medium">Deliver production SSO for clinicians</div>
+            <div className="mt-1 text-xs text-muted-foreground">Overdue · we promised</div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export function AskReliaPreview() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Ask Relia</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {["What did we promise this customer?", "What are their biggest risks?", "Who is the champion?"].map((item) => (
+            <span key={item} className="rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+              {item}
+            </span>
+          ))}
+        </div>
+        <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Question</div>
+          <p className="mt-1 font-medium">What did we promise this customer?</p>
+        </div>
+        <div className="space-y-2 text-sm leading-6">
+          <p>
+            Northstar committed to deliver production SSO for Meridian clinicians by the last steering meeting.
+            That date was missed. Meridian security still owes IdP metadata, and the CISO will not approve
+            production SSO without it.
+          </p>
+          <p className="text-xs text-muted-foreground">Grounded in stored records. Model: grounded assembler</p>
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Sources</div>
+          <ul className="mt-2 space-y-2">
+            <li className="rounded-lg border p-3 text-xs">
+              <div className="font-medium">Timeline · SSO due date missed</div>
+              <p className="mt-1 text-muted-foreground">We committed to SSO by last Friday&apos;s steering meeting.</p>
+            </li>
+            <li className="rounded-lg border p-3 text-xs">
+              <div className="font-medium">Commitment · Deliver production SSO</div>
+              <p className="mt-1 text-muted-foreground">Overdue. Direction: we promised.</p>
+            </li>
+          </ul>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function AccountOverviewPreview() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center gap-2">
+          <CardTitle>Meridian Health Systems</CardTitle>
+          <HealthBadge health="at_risk" score={48} />
+          <Pill>renewal</Pill>
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4 sm:grid-cols-2">
+        <div className="rounded-lg border p-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Champion</div>
+          <div className="mt-1 text-sm font-medium">Priya Shah</div>
+          <div className="text-xs text-muted-foreground">VP Clinical Ops · influence high</div>
+        </div>
+        <div className="rounded-lg border p-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open work</div>
+          <div className="mt-1 space-y-1 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              SSO implementation slipped <SeverityBadge severity="high" />
+            </div>
+            <div className="text-xs text-muted-foreground">2 open commitments · 1 live opportunity</div>
+          </div>
+        </div>
+        <div className="rounded-lg border p-3 sm:col-span-2">
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Grounded brief</div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            Meridian is in renewal with relationship health at risk. Open risks include champion departure and SSO
+            still blocked on IdP metadata. Every statement stays attached to the timeline, contacts, and stored
+            intelligence — Relia does not invent customer facts.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function ProductPreview() {
   return (
     <AppChrome subtitle="Priority is operational: at-risk accounts, overdue promises, and recent customer changes.">
@@ -109,39 +255,9 @@ export function ProductPreview() {
             ))}
           </CardContent>
         </Card>
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <div className="flex flex-wrap items-center gap-2">
-              <CardTitle>Meridian Health Systems</CardTitle>
-              <HealthBadge health="at_risk" score={48} />
-              <Pill>renewal</Pill>
-            </div>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            <div className="rounded-lg border p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Champion</div>
-              <div className="mt-1 text-sm font-medium">Priya Shah</div>
-              <div className="text-xs text-muted-foreground">VP Clinical Ops · influence high</div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Open work</div>
-              <div className="mt-1 space-y-1 text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  SSO implementation slipped <SeverityBadge severity="high" />
-                </div>
-                <div className="text-xs text-muted-foreground">2 open commitments · 1 live opportunity</div>
-              </div>
-            </div>
-            <div className="rounded-lg border p-3 sm:col-span-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Grounded brief</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                Meridian is in renewal with relationship health at risk. Open risks include champion departure and SSO
-                still blocked on IdP metadata. Every statement stays attached to the timeline, contacts, and stored
-                intelligence — Relia does not invent customer facts.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="lg:col-span-3">
+          <AccountOverviewPreview />
+        </div>
       </div>
       <Card>
         <CardHeader>
@@ -159,6 +275,11 @@ export function ProductPreview() {
           ))}
         </CardContent>
       </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TimelinePreview />
+        <AskReliaPreview />
+      </div>
+      <IntelligencePreview />
     </AppChrome>
   );
 }

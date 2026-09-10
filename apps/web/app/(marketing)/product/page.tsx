@@ -1,11 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AiSection, PreviewSection, ValueSection, WorkflowSection } from "@/components/marketing/sections";
+import {
+  AskSection,
+  CapabilitiesSection,
+  HowItWorksSection,
+  PipelineSection,
+  PreviewSection,
+} from "@/components/marketing/sections";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Product — Relia",
+  title: "Product",
   description: "Accounts, timeline, intelligence objects, and grounded AI — the Relia relationship system of record.",
 };
 
@@ -18,22 +24,23 @@ export default function ProductPage() {
           Everything on the account, ready for the next conversation.
         </h1>
         <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-          Relia is not a BI dashboard and not a generic chatbot. It is CRM-style relationship management with a
-          chronological timeline, structured intelligence, and AI that only uses stored evidence.
+          Relia is CRM-style relationship management with a chronological timeline, structured intelligence,
+          and AI that only uses stored evidence.
         </p>
         <div className="mt-6 flex flex-wrap gap-3">
           <Button nativeButton={false} render={<Link href="/signup" />}>
-            Start Free
+            Start workspace
           </Button>
           <Button variant="outline" nativeButton={false} render={<Link href="/login" />}>
-            Login
+            Sign in
           </Button>
         </div>
       </section>
-      <ValueSection className="border-t-0" />
-      <WorkflowSection />
+      <PipelineSection />
+      <HowItWorksSection />
+      <CapabilitiesSection />
       <PreviewSection />
-      <AiSection />
+      <AskSection />
     </>
   );
 }

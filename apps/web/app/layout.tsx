@@ -14,9 +14,34 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+  : "http://127.0.0.1:43180";
+
+const title = "Relia — Relationship Intelligence for Customer Teams";
+const description =
+  "Relationship intelligence for CSMs, account managers, and account executives. One workspace for timelines, health, risks, commitments, and AI that only answers from stored evidence.";
+
 export const metadata: Metadata = {
-  title: "Relia — Relationship Intelligence",
-  description: "Know what is happening with every customer relationship before you walk into the room.",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: title,
+    template: "%s · Relia",
+  },
+  description,
+  applicationName: "Relia",
+  openGraph: {
+    title,
+    description,
+    type: "website",
+    locale: "en_US",
+    siteName: "Relia",
+  },
+  twitter: {
+    card: "summary",
+    title,
+    description,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

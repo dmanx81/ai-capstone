@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
-  title: "Security — Relia",
+  title: "Security",
   description: "Organization isolation, RLS, server-side roles, and secrets that never reach the browser.",
 };
 
@@ -42,7 +42,8 @@ export default function SecurityPage() {
       </h1>
       <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
         Relia is designed for customer teams that cannot mix workspaces or invent facts about an account. Authentication
-        uses an HttpOnly session cookie. Optional Supabase JWTs are verified on the API.
+        uses an HttpOnly session cookie. Optional Supabase JWTs are verified on the API. This page does not claim SOC 2,
+        ISO 27001, HIPAA, or GDPR certification.
       </p>
       <div className="mt-10 grid gap-4 md:grid-cols-2">
         {ITEMS.map((item) => {
@@ -64,10 +65,10 @@ export default function SecurityPage() {
       </div>
       <div className="mt-10 flex flex-wrap gap-3">
         <Button nativeButton={false} render={<Link href="/signup" />}>
-          Start Free
+          Start workspace
         </Button>
         <Button variant="outline" nativeButton={false} render={<Link href="/login" />}>
-          Login
+          Sign in
         </Button>
       </div>
     </div>

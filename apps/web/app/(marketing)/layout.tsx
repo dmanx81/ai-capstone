@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
+
 import { SiteFooter } from "@/components/marketing/site-footer";
 import { SiteHeader } from "@/components/marketing/site-header";
+
+export const metadata: Metadata = {
+  title: {
+    default: "Relia — Relationship Intelligence for Customer Teams",
+    template: "%s · Relia",
+  },
+};
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (

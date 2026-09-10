@@ -5,7 +5,7 @@ import { PricingGrid } from "@/components/marketing/pricing-grid";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
-  title: "Pricing — Relia",
+  title: "Pricing",
   description: "Free, Starter, and Growth plans for Relia relationship intelligence.",
 };
 
@@ -26,11 +26,11 @@ export default function PricingPage() {
       <p className="mt-8 text-sm text-muted-foreground">
         Need to look around first?{" "}
         <Link href="/login" className="underline">
-          Login
+          Sign in
         </Link>{" "}
         to the Northstar demo, or{" "}
         <Link href="/signup" className="underline">
-          Start Free
+          start a workspace
         </Link>
         .
       </p>
