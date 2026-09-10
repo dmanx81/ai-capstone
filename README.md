@@ -92,9 +92,9 @@ Documented in `.env.example`. Secrets (`JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
 
 Follow [docs/DEPLOY.md](docs/DEPLOY.md). In short:
 
-1. Provision a Supabase project. Run `supabase/migrations/*.sql` in order (includes `match_chunks`, RLS, invitations).
+1. Provision a Supabase project. Follow [docs/SUPABASE.md](docs/SUPABASE.md). Apply `supabase/migrations/*.sql` in order (`0001`–`0008`, including `match_chunks`, RLS, invitations, and hardening).
 2. Set `DATABASE_URL` to the Postgres connection string (SQLAlchemy `postgresql+psycopg://` form).
-3. Set `JWT_SECRET` or `SUPABASE_JWT_SECRET`, plus `FRONTEND_ORIGIN`. Set `APP_ENV=production` so demo seed does not run.
+3. Set `JWT_SECRET` (unique, ≥32 characters), `COOKIE_SECURE=true`, and `FRONTEND_ORIGIN`. Set `APP_ENV=production` and `SEED_DEMO=false` so demo seed cannot run.
 4. Host FastAPI (Fly, Render, Cloud Run, …) and point `API_INTERNAL_URL` at it for the Next.js server.
 5. Host the Next.js app (Vercel is supported for the frontend).
 6. Point Stripe webhooks at `https://<api-host>/api/v1/billing/webhook`.

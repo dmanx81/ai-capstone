@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 
-const API = process.env.API_INTERNAL_URL || process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:43181";
+const API = process.env.API_INTERNAL_URL || "http://127.0.0.1:43181";
 
 async function proxy(req: NextRequest, path: string[]) {
   const incoming = new URL(req.url);

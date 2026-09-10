@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import (
     Account,
     Commitment,
@@ -76,6 +77,8 @@ def add_event(db: Session, account: Account, owner_id: str, days: int, event_typ
 
 
 def seed_demo(db: Session) -> None:
+    if get_settings().app_env == "production":
+        raise RuntimeError("Refusing to seed demo data when APP_ENV=production")
     if db.query(User).filter(User.email == "demo@relia.app").first():
         return
 

@@ -12,17 +12,15 @@ The browser never receives `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `JW
 
 ## 1. Supabase
 
-1. Create a project.
-2. Run `supabase/migrations/0001_*.sql` through `0007_*.sql` in the SQL editor (or `supabase db push`).
-   - `0001` enables `vector`
-   - `0005` creates `chunks` + `match_chunks`
-   - `0006` enables RLS
-   - `0007` adds invitations and AI usage events
-3. Set API `DATABASE_URL` to the SQLAlchemy form:
-   `postgresql+psycopg://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres`
-4. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_JWT_SECRET` on the API if you verify Supabase Auth JWTs.
-5. Keep `SUPABASE_SERVICE_ROLE_KEY` on the API only, and only if a future server job needs it. Relia does not send it to the client.
-6. Set `APP_ENV=production` and `SEED_DEMO=false` so demo accounts are not inserted.
+Follow **[docs/SUPABASE.md](./SUPABASE.md)** exactly. In short:
+
+1. Create a production project and pick a region.
+2. Apply `supabase/migrations/0001_*.sql` through `0008_*.sql` in order on an empty database.
+3. Set API `DATABASE_URL` to the pooled SQLAlchemy URL (`postgresql+psycopg://…?sslmode=require`).
+4. Set `APP_ENV=production`, `SEED_DEMO=false`, `COOKIE_SECURE=true`, and a unique `JWT_SECRET`.
+5. Keep `SUPABASE_SERVICE_ROLE_KEY` off the Next.js host and out of `NEXT_PUBLIC_*`. Relia does not use it in code today.
+6. Create the first owner via `/signup`. Do not seed demo users in production.
+7. Run `supabase/verify_rls.sql` in that project before calling RLS “verified live”.
 
 Local development stays on SQLite when `DATABASE_URL` is unset. Demo seed runs only when `SEED_DEMO=true` and `APP_ENV` is not `production`.
 

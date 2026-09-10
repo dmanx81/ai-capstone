@@ -84,6 +84,26 @@ class Settings(BaseSettings):
     def supabase_enabled(self) -> bool:
         return bool(self.supabase_url and (self.supabase_jwt_secret or self.supabase_anon_key))
 
+    def assert_production_safe(self) -> None:
+        if self.app_env != "production":
+            return
+        forbidden_secrets = {
+            "",
+            "dev-only-change-me-relia-jwt-secret",
+            "replace-with-a-long-random-secret",
+            "test-secret-relia-please-use-32b+",
+        }
+        if self.jwt_secret.strip() in forbidden_secrets or len(self.jwt_secret) < 32:
+            raise RuntimeError("JWT_SECRET must be a unique value of at least 32 characters when APP_ENV=production")
+        if self.database_url.startswith("sqlite"):
+            raise RuntimeError("DATABASE_URL must be a Postgres URL when APP_ENV=production (do not use SQLite)")
+        if not self.cookie_secure:
+            raise RuntimeError("COOKIE_SECURE=true is required when APP_ENV=production")
+        if self.supabase_service_role_key and not self.supabase_url:
+            raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY is set but SUPABASE_URL is empty")
+        if self.seed_demo:
+            raise RuntimeError("SEED_DEMO must be false when APP_ENV=production")
+
 
 @lru_cache
 def get_settings() -> Settings:

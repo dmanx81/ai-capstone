@@ -23,10 +23,16 @@ def as_dict(obj: object) -> dict[str, Any]:
             else:
                 data[column.name] = value
         data.pop("password_hash", None)
+        data.pop("token_hash", None)
+        data.pop("stripe_customer_id", None)
+        data.pop("stripe_subscription_id", None)
         return data
     encoded = jsonable_encoder(obj)
     if isinstance(encoded, dict):
         encoded.pop("password_hash", None)
+        encoded.pop("token_hash", None)
+        encoded.pop("stripe_customer_id", None)
+        encoded.pop("stripe_subscription_id", None)
         return encoded
     return {"value": encoded}
 

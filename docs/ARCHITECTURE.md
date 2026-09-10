@@ -16,7 +16,11 @@ Browser (Next.js :43180)
 
 ## Tenancy
 
-Every business table has `org_id`. The session cookie identifies the user; `X-Organization-Id` or the JWT `org_id` claim selects the workspace. Members cannot read another organization's rows. Production RLS in `supabase/migrations/0006_rls.sql` repeats this rule in the database.
+Every business table has `org_id`. The Relia session cookie identifies the user; `X-Organization-Id` or the JWT `org_id` claim selects the workspace. API queries always filter by that `org_id`. Spoofing another workspace ID returns 403 if the user is not a member.
+
+Production Postgres also enables RLS (`supabase/migrations/0006_rls.sql` and `0008_rls_hardening.sql`). `anon` is revoked. `authenticated` can only see rows for `auth.uid()` memberships. Viewers cannot write customer tables through PostgREST. The FastAPI `DATABASE_URL` role is the table owner and bypasses RLS; that is why application-level `org_id` filters remain mandatory.
+
+See [docs/SUPABASE.md](./SUPABASE.md).
 
 ## Relationship model
 

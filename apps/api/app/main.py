@@ -18,6 +18,7 @@ _hits: dict[str, list[float]] = defaultdict(list)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    settings.assert_production_safe()
     init_db()
     if settings.should_seed:
         db = SessionLocal()
