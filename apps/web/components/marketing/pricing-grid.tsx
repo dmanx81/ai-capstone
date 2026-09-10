@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +47,7 @@ export function PricingGrid() {
       {PLANS.map((plan) => (
         <Card key={plan.id} className={cn(plan.featured && "ring-2 ring-primary")}>
           <CardHeader>
+            {plan.featured ? <p className="text-xs font-medium text-muted-foreground">Most used</p> : null}
             <CardTitle>{plan.name}</CardTitle>
             <p className="text-sm text-muted-foreground">{plan.summary}</p>
           </CardHeader>
@@ -56,7 +58,10 @@ export function PricingGrid() {
             </div>
             <ul className="space-y-2 text-sm text-muted-foreground">
               {plan.items.map((item) => (
-                <li key={item}>{item}</li>
+                <li key={item} className="flex gap-2">
+                  <Check className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
+                  <span>{item}</span>
+                </li>
               ))}
             </ul>
           </CardContent>

@@ -30,7 +30,7 @@ export default function ProductPage() {
           </Button>
         </div>
       </section>
-      <ValueSection />
+      <ValueSection className="border-t-0" />
       <WorkflowSection />
       <PreviewSection />
       <AiSection />

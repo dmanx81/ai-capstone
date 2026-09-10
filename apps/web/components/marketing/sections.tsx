@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Bot,
   Building2,
+  Check,
   FileSearch,
   Handshake,
   Lock,
@@ -10,19 +11,37 @@ import {
   Users,
 } from "lucide-react";
 
-import { ProductPreview } from "@/components/marketing/product-preview";
+import { HeroPreview, ProductPreview } from "@/components/marketing/product-preview";
 import { PricingGrid } from "@/components/marketing/pricing-grid";
 import { Section } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const QUESTIONS = [
-  "What is happening with this account?",
-  "What changed recently?",
-  "What risks and opportunities exist?",
-  "What promises were made?",
-  "What should I do next?",
-  "What should I know before the meeting?",
+  {
+    title: "What is happening with this account?",
+    body: "Health, lifecycle, ARR, and stakeholders live on the same record as the open work.",
+  },
+  {
+    title: "What changed recently?",
+    body: "Meetings, emails, calls, and notes stay chronological so you are not reconstructing history from inboxes.",
+  },
+  {
+    title: "What risks and opportunities exist?",
+    body: "Risks and expansion threads are structured objects with owners, status, and evidence — not a slide deck.",
+  },
+  {
+    title: "What promises were made?",
+    body: "Commitments keep a due date and a direction: we promised, or they promised. Overdue items surface on the dashboard.",
+  },
+  {
+    title: "What should I do next?",
+    body: "Tasks and the focus queue are operational. Agents can propose work; writes wait for confirmation.",
+  },
+  {
+    title: "What should I know before the meeting?",
+    body: "Grounded briefs and Ask Relia retrieve stored chunks and cite sources. Missing evidence is said out loud.",
+  },
 ];
 
 const WORKFLOW = [
@@ -66,49 +85,51 @@ const SECURITY = [
 
 export function HeroSection() {
   return (
-    <section className="mx-auto max-w-6xl px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16">
-      <p className="text-sm font-medium text-muted-foreground">Relationship intelligence for customer teams</p>
-      <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
-        Walk into every customer conversation already knowing the relationship.
-      </h1>
-      <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
-        Relia is the system of record for accounts, timelines, risks, promises, and next actions — with AI that only
-        speaks from evidence.
-      </p>
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
-          Start Free
-        </Button>
-        <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/login" />}>
-          Login
-        </Button>
+    <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-12 sm:px-6 sm:pb-20 sm:pt-16 lg:grid-cols-2">
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">Relationship intelligence for customer teams</p>
+        <h1 className="mt-3 max-w-3xl text-4xl font-semibold tracking-tight sm:text-5xl">
+          Walk into every customer conversation already knowing the relationship.
+        </h1>
+        <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+          Relia is the system of record for accounts, timelines, risks, promises, and next actions — with AI that only
+          speaks from evidence.
+        </p>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Button size="lg" nativeButton={false} render={<Link href="/signup" />}>
+            Start Free
+          </Button>
+          <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/login" />}>
+            Login
+          </Button>
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Try the Northstar demo: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">demo@relia.app</code> /{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">demo-password</code>
+        </p>
       </div>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Try the Northstar demo: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">demo@relia.app</code> /{" "}
-        <code className="rounded bg-muted px-1.5 py-0.5 text-xs">demo-password</code>
-      </p>
+      <HeroPreview />
     </section>
   );
 }
 
-export function ValueSection() {
+export function ValueSection({ className }: { className?: string }) {
   return (
     <Section
       id="product"
+      className={className}
       eyebrow="Product"
       title="The relationship is the system of record."
       description="CRM fields, a chronological timeline, and structured intelligence feed the same questions your team already asks before a customer meeting."
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {QUESTIONS.map((item) => (
-          <Card key={item}>
+          <Card key={item.title}>
             <CardHeader>
-              <CardTitle className="text-sm">{item}</CardTitle>
+              <CardTitle className="text-sm">{item.title}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Answered from the account timeline, stakeholders, and stored intelligence — never invented.
-              </p>
+              <p className="text-sm text-muted-foreground">{item.body}</p>
             </CardContent>
           </Card>
         ))}
@@ -128,8 +149,10 @@ export function WorkflowSection() {
       <ol className="grid gap-4 md:grid-cols-5">
         {WORKFLOW.map((item) => (
           <li key={item.step} className="rounded-xl border bg-card p-4">
-            <div className="text-xs font-medium text-muted-foreground">Step {item.step}</div>
-            <div className="mt-2 text-sm font-medium">{item.title}</div>
+            <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
+              {item.step}
+            </div>
+            <div className="mt-3 text-sm font-medium">{item.title}</div>
             <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
           </li>
         ))}
@@ -206,6 +229,11 @@ export function UseCasesSection() {
           );
         })}
       </div>
+      <div className="mt-8">
+        <Button variant="outline" nativeButton={false} render={<Link href="/use-cases" />}>
+          See Customer Success, AM, and Sales
+        </Button>
+      </div>
     </Section>
   );
 }
@@ -249,6 +277,11 @@ export function SecuritySection() {
           );
         })}
       </div>
+      <div className="mt-8">
+        <Button variant="outline" nativeButton={false} render={<Link href="/security" />}>
+          Read how Relia isolates workspaces
+        </Button>
+      </div>
     </Section>
   );
 }
@@ -273,5 +306,18 @@ export function FinalCta() {
         </div>
       </div>
     </section>
+  );
+}
+
+export function CheckList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-2 text-sm text-muted-foreground">
+      {items.map((line) => (
+        <li key={line} className="flex gap-2">
+          <Check className="mt-0.5 size-4 shrink-0 text-foreground" aria-hidden />
+          <span>{line}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

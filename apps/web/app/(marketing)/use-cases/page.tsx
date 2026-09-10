@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { USE_CASES } from "@/components/marketing/sections";
+import { CheckList, USE_CASES } from "@/components/marketing/sections";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -52,11 +52,7 @@ export default function UseCasesPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <p className="text-sm text-muted-foreground">{item.body}</p>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  {DETAIL[item.title]?.map((line) => (
-                    <li key={line}>{line}</li>
-                  ))}
-                </ul>
+                <CheckList items={DETAIL[item.title] ?? []} />
               </CardContent>
             </Card>
           );

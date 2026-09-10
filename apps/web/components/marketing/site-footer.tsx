@@ -49,7 +49,7 @@ export function SiteFooter() {
       </div>
       <div className="border-t">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>© {new Date().getFullYear()} Relia. All rights reserved.</span>
+          <span>© 2026 Relia. All rights reserved.</span>
           <span>Organization-scoped. Grounded in your system of record.</span>
         </div>
       </div>
