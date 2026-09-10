@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import AuthContext, get_context
+from app.deps import AuthContext, get_context, require_write
 from app.models import Account, Commitment, Opportunity, Risk, Task, uid
 from app.routers import add_linked_event, as_dict, as_list
 from app.schemas import CommitmentIn, OpportunityIn, RiskIn, TaskIn
@@ -33,7 +33,7 @@ def list_risks(account_id: str, ctx: AuthContext = Depends(get_context), db: Ses
 
 
 @router.post("/accounts/{account_id}/risks", status_code=201)
-def create_risk(account_id: str, payload: RiskIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)):
+def create_risk(account_id: str, payload: RiskIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)):
     account = _account(db, ctx, account_id)
     risk = Risk(id=uid(), org_id=ctx.organization.id, account_id=account.id, **_dump(payload))
     db.add(risk)
@@ -57,7 +57,7 @@ def create_risk(account_id: str, payload: RiskIn, ctx: AuthContext = Depends(get
 
 
 @router.patch("/risks/{risk_id}")
-def update_risk(risk_id: str, payload: RiskIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)):
+def update_risk(risk_id: str, payload: RiskIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)):
     risk = db.query(Risk).filter(Risk.id == risk_id, Risk.org_id == ctx.organization.id).one_or_none()
     if not risk:
         raise HTTPException(status_code=404, detail="Risk not found")
@@ -79,7 +79,7 @@ def list_opps(account_id: str, ctx: AuthContext = Depends(get_context), db: Sess
 
 @router.post("/accounts/{account_id}/opportunities", status_code=201)
 def create_opp(
-    account_id: str, payload: OpportunityIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    account_id: str, payload: OpportunityIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     account = _account(db, ctx, account_id)
     opp = Opportunity(id=uid(), org_id=ctx.organization.id, account_id=account.id, **_dump(payload))
@@ -104,7 +104,7 @@ def create_opp(
 
 @router.patch("/opportunities/{opportunity_id}")
 def update_opp(
-    opportunity_id: str, payload: OpportunityIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    opportunity_id: str, payload: OpportunityIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     opp = (
         db.query(Opportunity)
@@ -129,7 +129,7 @@ def list_commits(account_id: str, ctx: AuthContext = Depends(get_context), db: S
 
 @router.post("/accounts/{account_id}/commitments", status_code=201)
 def create_commit(
-    account_id: str, payload: CommitmentIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    account_id: str, payload: CommitmentIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     account = _account(db, ctx, account_id)
     item = Commitment(id=uid(), org_id=ctx.organization.id, account_id=account.id, **_dump(payload))
@@ -155,7 +155,7 @@ def create_commit(
 
 @router.patch("/commitments/{commitment_id}")
 def update_commit(
-    commitment_id: str, payload: CommitmentIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    commitment_id: str, payload: CommitmentIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     item = (
         db.query(Commitment)
@@ -195,7 +195,7 @@ def list_tasks(account_id: str, ctx: AuthContext = Depends(get_context), db: Ses
 
 
 @router.post("/accounts/{account_id}/tasks", status_code=201)
-def create_task(account_id: str, payload: TaskIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)):
+def create_task(account_id: str, payload: TaskIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)):
     account = _account(db, ctx, account_id)
     task = Task(id=uid(), org_id=ctx.organization.id, account_id=account.id, source="user", **payload.model_dump())
     db.add(task)
@@ -218,7 +218,7 @@ def create_task(account_id: str, payload: TaskIn, ctx: AuthContext = Depends(get
 
 
 @router.patch("/tasks/{task_id}")
-def update_task(task_id: str, payload: TaskIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)):
+def update_task(task_id: str, payload: TaskIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)):
     task = db.query(Task).filter(Task.id == task_id, Task.org_id == ctx.organization.id).one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")

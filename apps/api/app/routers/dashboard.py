@@ -132,6 +132,17 @@ def dashboard(ctx: AuthContext = Depends(get_context), db: Session = Depends(get
             for e in recent
         ],
         "focus": _focus_line(health_dist, overdue, attention),
+        "today": _today_queue(
+            accounts=accounts,
+            overdue=overdue,
+            names=names,
+            tasks=tasks,
+            opps=opps,
+            recent=recent,
+            now=now,
+            db=db,
+            org_id=org_id,
+        ),
     }
 
 
@@ -144,3 +155,111 @@ def _focus_line(health_dist: dict, overdue: list, attention: list[Account]) -> s
     if health_dist.get("watch"):
         return "No critical accounts. Review watch-status customers before they drift."
     return "Portfolio looks stable. Use the time to advance open opportunities."
+
+
+def _today_queue(
+    *,
+    accounts: list[Account],
+    overdue: list[Commitment],
+    names: dict[str, str],
+    tasks: list[Task],
+    opps: list[Opportunity],
+    recent: list[TimelineEvent],
+    now: datetime,
+    db: Session,
+    org_id: str,
+) -> list[dict]:
+    items: list[dict] = []
+    for account in sorted(
+        [a for a in accounts if a.health in {"at_risk", "critical"} or a.lifecycle in {"churn_risk", "renewal"}],
+        key=lambda a: a.health_score,
+    )[:4]:
+        items.append(
+            {
+                "kind": "account",
+                "urgency": "high" if account.health in {"at_risk", "critical"} else "medium",
+                "title": f"Review {account.name}",
+                "detail": f"Health {account.health.replace('_', ' ')} ({account.health_score}/100)",
+                "account_id": account.id,
+                "account_name": account.name,
+            }
+        )
+    for commit in overdue[:4]:
+        items.append(
+            {
+                "kind": "commitment",
+                "urgency": "high",
+                "title": commit.description,
+                "detail": f"Overdue · {names.get(commit.account_id)} · {commit.direction}",
+                "account_id": commit.account_id,
+                "account_name": names.get(commit.account_id),
+            }
+        )
+    risks = (
+        db.query(Risk)
+        .filter(Risk.org_id == org_id, Risk.status.in_(["open", "monitoring"]), Risk.severity.in_(["high", "critical"]))
+        .all()
+    )
+    for risk in risks[:4]:
+        items.append(
+            {
+                "kind": "risk",
+                "urgency": "high" if risk.severity == "critical" else "medium",
+                "title": risk.title,
+                "detail": f"{risk.severity} risk · {names.get(risk.account_id)}",
+                "account_id": risk.account_id,
+                "account_name": names.get(risk.account_id),
+            }
+        )
+    upcoming = [
+        t for t in tasks if t.due_date and now <= _aware(t.due_date) <= now + timedelta(days=7)
+    ]
+    for task in sorted(upcoming, key=lambda t: _aware(t.due_date))[:4]:
+        items.append(
+            {
+                "kind": "task",
+                "urgency": "medium",
+                "title": task.title,
+                "detail": f"Due soon · {names.get(task.account_id)}",
+                "account_id": task.account_id,
+                "account_name": names.get(task.account_id),
+            }
+        )
+    expansions = sorted(
+        [o for o in opps if (o.confidence or 0) >= 0.5],
+        key=lambda o: float(o.potential_value or 0),
+        reverse=True,
+    )
+    for opp in expansions[:3]:
+        items.append(
+            {
+                "kind": "opportunity",
+                "urgency": "low",
+                "title": opp.title,
+                "detail": f"Expansion · {names.get(opp.account_id)}",
+                "account_id": opp.account_id,
+                "account_name": names.get(opp.account_id),
+            }
+        )
+    week = now - timedelta(days=7)
+    for event in [e for e in recent if _aware(e.occurred_at) >= week][:4]:
+        items.append(
+            {
+                "kind": "change",
+                "urgency": "low",
+                "title": event.title,
+                "detail": f"{event.event_type.replace('_', ' ')} · {names.get(event.account_id)}",
+                "account_id": event.account_id,
+                "account_name": names.get(event.account_id),
+            }
+        )
+    rank = {"high": 0, "medium": 1, "low": 2}
+    seen: set[tuple[str, str]] = set()
+    unique: list[dict] = []
+    for item in sorted(items, key=lambda row: rank.get(row["urgency"], 9)):
+        key = (item["kind"], item["title"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+    return unique[:10]

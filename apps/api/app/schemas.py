@@ -13,6 +13,7 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     full_name: str = Field(min_length=1, max_length=200)
     organization_name: str | None = Field(default=None, max_length=200)
+    invite_token: str | None = None
 
 
 class LoginIn(BaseModel):
@@ -323,3 +324,12 @@ class CheckoutIn(BaseModel):
 
 class OrgCreate(BaseModel):
     name: str = Field(min_length=2, max_length=200)
+
+
+class OrgUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=200)
+
+
+class InviteIn(BaseModel):
+    email: EmailStr
+    role: Literal["viewer", "member", "admin"] = "member"

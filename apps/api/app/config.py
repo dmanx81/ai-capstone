@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     seed_demo: bool = True
     embedding_dim: int = 1536
     upload_dir: str = str(DATA_DIR / "uploads")
+    resend_api_key: str = ""
+    invite_from_email: str = "Relia <noreply@relia.app>"
+    llm_timeout_seconds: float = 30.0
+    llm_retries: int = 2
 
     @property
     def cors_origin_list(self) -> list[str]:
@@ -71,6 +75,14 @@ class Settings(BaseSettings):
         if self.openai_api_key:
             return "openai"
         return "hashing"
+
+    @property
+    def should_seed(self) -> bool:
+        return self.seed_demo and self.app_env != "production"
+
+    @property
+    def supabase_enabled(self) -> bool:
+        return bool(self.supabase_url and (self.supabase_jwt_secret or self.supabase_anon_key))
 
 
 @lru_cache

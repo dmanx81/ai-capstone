@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
+from app.config import PLANS, get_settings
 from app.database import get_db
 from app.deps import AuthContext, get_context
 from app.models import Organization
@@ -12,6 +12,56 @@ from app.services.billing import billing_view
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 settings = get_settings()
+
+
+def _price_plan(price_id: str | None) -> str | None:
+    if not price_id:
+        return None
+    if price_id == settings.stripe_price_starter:
+        return "starter"
+    if price_id == settings.stripe_price_growth:
+        return "growth"
+    return None
+
+
+def _apply_subscription(org: Organization, obj: dict) -> None:
+    status = obj.get("status")
+    customer = obj.get("customer")
+    if isinstance(customer, dict):
+        customer = customer.get("id")
+    if customer:
+        org.stripe_customer_id = org.stripe_customer_id or customer
+
+    if status in {"canceled", "unpaid", "incomplete_expired"}:
+        org.plan = "free"
+        org.plan_status = status
+        return
+
+    items = (obj.get("items") or {}).get("data") or []
+    price_id = None
+    if items:
+        price = items[0].get("price") or {}
+        price_id = price.get("id") if isinstance(price, dict) else None
+    plan = _price_plan(price_id)
+    if not plan:
+        # Metadata is stamped by Relia at Checkout creation, not supplied by the browser.
+        plan = (obj.get("metadata") or {}).get("plan")
+    if plan in PLANS:
+        org.plan = plan
+    if status:
+        org.plan_status = status
+    elif obj.get("payment_status") == "paid":
+        org.plan_status = "active"
+
+    sub_id = obj.get("subscription") if obj.get("object") == "checkout.session" else obj.get("id")
+    if isinstance(sub_id, str) and sub_id.startswith("sub_"):
+        org.stripe_subscription_id = sub_id
+    elif obj.get("object") == "subscription" and obj.get("id"):
+        org.stripe_subscription_id = obj["id"]
+
+    period_end = obj.get("current_period_end")
+    if period_end:
+        org.current_period_end = datetime.fromtimestamp(int(period_end), tz=timezone.utc)
 
 
 @router.get("/status")
@@ -50,6 +100,7 @@ def checkout(payload: CheckoutIn, ctx: AuthContext = Depends(get_context), db: S
         success_url=settings.stripe_success_url,
         cancel_url=settings.stripe_cancel_url,
         metadata={"org_id": ctx.organization.id, "plan": payload.plan},
+        subscription_data={"metadata": {"org_id": ctx.organization.id, "plan": payload.plan}},
     )
     return {"demo": False, "checkout_url": session.url}
 
@@ -69,6 +120,8 @@ def demo_activate(payload: CheckoutIn, ctx: AuthContext = Depends(get_context), 
 
 @router.post("/portal")
 def portal(ctx: AuthContext = Depends(get_context)) -> dict:
+    if ctx.role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Only owners and admins can open the billing portal")
     if not settings.stripe_enabled or not ctx.organization.stripe_customer_id:
         return {"demo": True, "url": None}
     import stripe
@@ -87,6 +140,8 @@ async def webhook(request: Request, db: Session = Depends(get_db)) -> dict:
     sig = request.headers.get("stripe-signature", "")
     if not settings.stripe_enabled:
         return {"ignored": True}
+    if not settings.stripe_webhook_secret:
+        raise HTTPException(status_code=500, detail="Stripe webhook secret is not configured")
     import stripe
 
     stripe.api_key = settings.stripe_secret_key
@@ -99,20 +154,20 @@ async def webhook(request: Request, db: Session = Depends(get_db)) -> dict:
     if event["type"] in {"checkout.session.completed", "customer.subscription.updated", "customer.subscription.created"}:
         org_id = (obj.get("metadata") or {}).get("org_id")
         customer = obj.get("customer")
+        if isinstance(customer, dict):
+            customer = customer.get("id")
         org = None
         if org_id:
             org = db.get(Organization, org_id)
         if org is None and customer:
             org = db.query(Organization).filter(Organization.stripe_customer_id == customer).one_or_none()
         if org:
-            plan = (obj.get("metadata") or {}).get("plan") or org.plan
-            org.plan = plan
-            org.plan_status = obj.get("status") or "active"
-            org.stripe_subscription_id = obj.get("subscription") or obj.get("id")
-            org.stripe_customer_id = org.stripe_customer_id or customer
+            _apply_subscription(org, obj)
             db.commit()
     elif event["type"] in {"customer.subscription.deleted"}:
         customer = obj.get("customer")
+        if isinstance(customer, dict):
+            customer = customer.get("id")
         org = db.query(Organization).filter(Organization.stripe_customer_id == customer).one_or_none()
         if org:
             org.plan = "free"

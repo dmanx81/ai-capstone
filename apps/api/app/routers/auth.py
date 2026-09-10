@@ -7,7 +7,7 @@ from app.database import get_db
 from app.deps import AuthContext, get_context, get_current_user
 from app.models import OrgMember, Organization, User, uid
 from app.routers import as_dict
-from app.schemas import LoginIn, OrgCreate, ProfileUpdate, RegisterIn
+from app.schemas import LoginIn, OrgCreate, OrgUpdate, ProfileUpdate, RegisterIn
 from app.security import (
     clear_session_cookie,
     create_token,
@@ -55,7 +55,18 @@ def register(payload: RegisterIn, response: Response, db: Session = Depends(get_
     db.flush()
     org = None
     role = None
-    if payload.organization_name:
+    if payload.invite_token:
+        from app.routers.invites import _get_pending
+
+        invite = _get_pending(db, payload.invite_token)
+        if invite.email.lower() != user.email:
+            raise HTTPException(status_code=403, detail="Invitation was sent to a different email")
+        db.add(OrgMember(id=uid(), org_id=invite.org_id, user_id=user.id, role=invite.role))
+        invite.status = "accepted"
+        invite.accepted_at = datetime.now(timezone.utc)
+        org = db.get(Organization, invite.org_id)
+        role = invite.role
+    elif payload.organization_name:
         org = Organization(
             id=uid(),
             name=payload.organization_name,
@@ -139,6 +150,16 @@ def switch_org(org_id: str, response: Response, db: Session = Depends(get_db), u
     token = create_token(user.id, user.email, org_id)
     set_session_cookie(response, token)
     return _session_payload(db, user, org, member.role)
+
+
+@router.patch("/org")
+def update_org(payload: OrgUpdate, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)) -> dict:
+    if ctx.role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Only owners and admins can rename the workspace")
+    ctx.organization.name = payload.name
+    db.commit()
+    db.refresh(ctx.organization)
+    return _session_payload(db, ctx.user, ctx.organization, ctx.role)
 
 
 @router.get("/members")

@@ -30,14 +30,23 @@ def create_token(user_id: str, email: str, org_id: str | None = None) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.jwt_expire_minutes)).timestamp()),
     }
-    secret = settings.supabase_jwt_secret or settings.jwt_secret
-    return jwt.encode(payload, secret, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def decode_token(token: str) -> dict:
-    secret = settings.supabase_jwt_secret or settings.jwt_secret
+    if settings.supabase_jwt_secret:
+        try:
+            return jwt.decode(
+                token,
+                settings.supabase_jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+                options={"verify_aud": False},
+            )
+        except jwt.PyJWTError:
+            pass
     try:
-        return jwt.decode(token, secret, algorithms=[settings.jwt_algorithm])
+        return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except jwt.PyJWTError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired session") from exc
 

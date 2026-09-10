@@ -9,7 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import get_settings
 from app.database import SessionLocal, init_db
-from app.routers import accounts, ai, auth, billing, dashboard, intelligence, timeline
+from app.routers import accounts, ai, auth, billing, dashboard, intelligence, invites, timeline
 from app.seed import seed_demo
 
 settings = get_settings()
@@ -19,7 +19,7 @@ _hits: dict[str, list[float]] = defaultdict(list)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
-    if settings.seed_demo:
+    if settings.should_seed:
         db = SessionLocal()
         try:
             seed_demo(db)
@@ -63,6 +63,7 @@ async def unhandled(_request: Request, exc: Exception):
 
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(invites.router, prefix="/api/v1")
 app.include_router(accounts.router, prefix="/api/v1")
 app.include_router(timeline.router, prefix="/api/v1")
 app.include_router(intelligence.router, prefix="/api/v1")

@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+
 from sqlalchemy.orm import Session
 
 from app.ai.embeddings import get_embedder
 from app.models import Account, Chunk, Contact, TimelineEvent, uid
 from app.models import Commitment, Document, Opportunity, Risk, Task
+
+
+def _content_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def chunk_text(text: str, size: int = 800, overlap: int = 120) -> list[str]:
@@ -31,16 +37,34 @@ def replace_source_chunks(
     source_id: str,
     text: str,
     extra: dict | None = None,
+    force: bool = False,
 ) -> None:
-    db.query(Chunk).filter(
-        Chunk.org_id == org_id,
-        Chunk.source_type == source_type,
-        Chunk.source_id == source_id,
-    ).delete()
     pieces = chunk_text(text)
+    digest = _content_hash(text)
+    existing = (
+        db.query(Chunk)
+        .filter(Chunk.org_id == org_id, Chunk.source_type == source_type, Chunk.source_id == source_id)
+        .all()
+    )
     if not pieces:
+        for row in existing:
+            db.delete(row)
         return
-    vectors = get_embedder().embed(pieces)
+    if (
+        not force
+        and existing
+        and len(existing) == len(pieces)
+        and all((row.extra or {}).get("content_hash") == digest for row in existing)
+    ):
+        return
+    try:
+        vectors = get_embedder().embed(pieces)
+    except Exception:
+        # Keep previous chunks if embedding fails so retrieval still has evidence.
+        return
+    for row in existing:
+        db.delete(row)
+    meta = {**(extra or {}), "content_hash": digest}
     for content, embedding in zip(pieces, vectors, strict=True):
         db.add(
             Chunk(
@@ -51,7 +75,7 @@ def replace_source_chunks(
                 source_id=source_id,
                 content=content,
                 embedding=embedding,
-                extra=extra or {},
+                extra=meta,
             )
         )
 
@@ -126,18 +150,69 @@ def index_document(db: Session, doc: Document) -> None:
     )
 
 
-def index_account_graph(db: Session, account_id: str, org_id: str) -> None:
+def index_account_graph(db: Session, account_id: str, org_id: str, *, force: bool = False) -> int:
     account = db.query(Account).filter(Account.id == account_id, Account.org_id == org_id).one()
     index_account_snapshot(db, account)
     for event in db.query(TimelineEvent).filter(TimelineEvent.account_id == account_id, TimelineEvent.org_id == org_id):
-        index_timeline(db, event)
+        text = f"{event.event_type}: {event.title}. {event.body or ''} Evidence: {event.evidence_excerpt or event.evidence_source or ''}"
+        replace_source_chunks(
+            db,
+            org_id=event.org_id,
+            account_id=event.account_id,
+            source_type="timeline",
+            source_id=event.id,
+            text=text,
+            extra={"event_type": event.event_type},
+            force=force,
+        )
     for risk in db.query(Risk).filter(Risk.account_id == account_id, Risk.org_id == org_id):
-        index_risk(db, risk)
+        replace_source_chunks(
+            db,
+            org_id=risk.org_id,
+            account_id=risk.account_id,
+            source_type="risk",
+            source_id=risk.id,
+            text=f"Risk ({risk.severity}, {risk.status}): {risk.title}. {risk.description}",
+            force=force,
+        )
     for opp in db.query(Opportunity).filter(Opportunity.account_id == account_id, Opportunity.org_id == org_id):
-        index_opportunity(db, opp)
+        replace_source_chunks(
+            db,
+            org_id=opp.org_id,
+            account_id=opp.account_id,
+            source_type="opportunity",
+            source_id=opp.id,
+            text=f"Opportunity ({opp.status}, value={opp.potential_value}): {opp.title}. {opp.description}. Next: {opp.next_action or 'n/a'}",
+            force=force,
+        )
     for item in db.query(Commitment).filter(Commitment.account_id == account_id, Commitment.org_id == org_id):
-        index_commitment(db, item)
+        replace_source_chunks(
+            db,
+            org_id=item.org_id,
+            account_id=item.account_id,
+            source_type="commitment",
+            source_id=item.id,
+            text=f"Commitment by {item.direction} ({item.status}, due {item.due_date}): {item.description}",
+            force=force,
+        )
     for task in db.query(Task).filter(Task.account_id == account_id, Task.org_id == org_id):
-        index_task(db, task)
+        replace_source_chunks(
+            db,
+            org_id=task.org_id,
+            account_id=task.account_id,
+            source_type="task",
+            source_id=task.id,
+            text=f"Task ({task.status}): {task.title}. {task.description or ''} Why: {task.rationale or ''}",
+            force=force,
+        )
     for doc in db.query(Document).filter(Document.account_id == account_id, Document.org_id == org_id):
-        index_document(db, doc)
+        replace_source_chunks(
+            db,
+            org_id=doc.org_id,
+            account_id=doc.account_id,
+            source_type="document",
+            source_id=doc.id,
+            text=f"Document {doc.filename}. {doc.extracted_text or ''}",
+            force=force,
+        )
+    return db.query(Chunk).filter(Chunk.account_id == account_id, Chunk.org_id == org_id).count()

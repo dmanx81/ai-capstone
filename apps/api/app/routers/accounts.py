@@ -3,7 +3,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import AuthContext, get_context
+from app.deps import AuthContext, get_context, require_write
 from app.models import Account, Contact, uid
 from app.routers import add_linked_event, as_dict, as_list, serialize_account, touch_account
 from app.schemas import AccountIn, AccountUpdate, ContactIn
@@ -35,7 +35,7 @@ def list_accounts(
 
 
 @router.post("/accounts", status_code=201)
-def create_account(payload: AccountIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)) -> dict:
+def create_account(payload: AccountIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)) -> dict:
     assert_can_create_account(db, ctx.organization)
     account = Account(
         id=uid(),
@@ -117,7 +117,7 @@ def get_account(account_id: str, ctx: AuthContext = Depends(get_context), db: Se
 
 @router.patch("/accounts/{account_id}")
 def update_account(
-    account_id: str, payload: AccountUpdate, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    account_id: str, payload: AccountUpdate, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ) -> dict:
     account = _account(db, ctx, account_id)
     data = payload.model_dump(exclude_unset=True)
@@ -130,7 +130,7 @@ def update_account(
 
 
 @router.delete("/accounts/{account_id}", status_code=204)
-def delete_account(account_id: str, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)) -> None:
+def delete_account(account_id: str, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)) -> None:
     if ctx.role not in {"owner", "admin"}:
         raise HTTPException(status_code=403, detail="Only admins can delete accounts")
     account = _account(db, ctx, account_id)
@@ -148,7 +148,7 @@ def list_contacts(account_id: str, ctx: AuthContext = Depends(get_context), db: 
 
 @router.post("/accounts/{account_id}/contacts", status_code=201)
 def create_contact(
-    account_id: str, payload: ContactIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    account_id: str, payload: ContactIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     account = _account(db, ctx, account_id)
     contact = Contact(id=uid(), org_id=ctx.organization.id, account_id=account.id, **payload.model_dump())
@@ -173,7 +173,7 @@ def create_contact(
 
 @router.patch("/contacts/{contact_id}")
 def update_contact(
-    contact_id: str, payload: ContactIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    contact_id: str, payload: ContactIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     contact = db.query(Contact).filter(Contact.id == contact_id, Contact.org_id == ctx.organization.id).one_or_none()
     if not contact:
@@ -188,7 +188,7 @@ def update_contact(
 
 
 @router.delete("/contacts/{contact_id}", status_code=204)
-def delete_contact(contact_id: str, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)) -> None:
+def delete_contact(contact_id: str, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)) -> None:
     contact = db.query(Contact).filter(Contact.id == contact_id, Contact.org_id == ctx.organization.id).one_or_none()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")

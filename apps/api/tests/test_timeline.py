@@ -30,6 +30,21 @@ def test_timeline_filter_and_create(client):
     updated = client.patch(f"/api/v1/timeline/{event_id}", json={"title": "Prep for Friday steering"})
     assert updated.status_code == 200
     assert updated.json()["title"] == "Prep for Friday steering"
+    assert updated.json()["editable"] is True
+
+    deleted = client.delete(f"/api/v1/timeline/{event_id}")
+    assert deleted.status_code == 204
+
+
+def test_system_timeline_events_are_not_editable(client):
+    account = _meridian(client)
+    listing = client.get(f"/api/v1/accounts/{account['id']}/timeline").json()
+    managed = next(row for row in listing if row["event_type"] in {"risk", "commitment", "ai_insight", "task"})
+    assert managed["editable"] is False
+    patched = client.patch(f"/api/v1/timeline/{managed['id']}", json={"title": "Should not stick"})
+    assert patched.status_code == 400
+    removed = client.delete(f"/api/v1/timeline/{managed['id']}")
+    assert removed.status_code == 400
 
 
 def test_risks_opportunities_commitments(client):

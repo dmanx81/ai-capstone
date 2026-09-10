@@ -5,9 +5,9 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import AuthContext, get_context
-from app.models import Account, TimelineEvent, uid
-from app.routers import as_dict, as_list
+from app.deps import AuthContext, get_context, require_write
+from app.models import Account, Chunk, TimelineEvent, uid
+from app.routers import as_dict
 from app.schemas import TimelineIn, TimelineUpdate
 from app.services.health import recompute_health
 from app.services.indexing import index_timeline
@@ -22,6 +22,12 @@ def _account(db: Session, ctx: AuthContext, account_id: str) -> Account:
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     return account
+
+
+def _serialize(event: TimelineEvent) -> dict:
+    data = as_dict(event)
+    data["editable"] = event.event_type in EDITABLE
+    return data
 
 
 @router.get("/accounts/{account_id}/timeline")
@@ -42,13 +48,15 @@ def list_timeline(
     if q:
         like = f"%{q}%"
         query = query.filter(or_(TimelineEvent.title.ilike(like), TimelineEvent.body.ilike(like)))
-    return as_list(query.order_by(TimelineEvent.occurred_at.desc()).all())
+    return [_serialize(row) for row in query.order_by(TimelineEvent.occurred_at.desc()).all()]
 
 
 @router.post("/accounts/{account_id}/timeline", status_code=201)
 def create_event(
-    account_id: str, payload: TimelineIn, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    account_id: str, payload: TimelineIn, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
+    if payload.event_type not in EDITABLE:
+        raise HTTPException(status_code=400, detail="Create this from its source record instead of the timeline")
     account = _account(db, ctx, account_id)
     event = TimelineEvent(
         id=uid(),
@@ -70,12 +78,12 @@ def create_event(
     recompute_health(db, account)
     db.commit()
     db.refresh(event)
-    return as_dict(event)
+    return _serialize(event)
 
 
 @router.patch("/timeline/{event_id}")
 def update_event(
-    event_id: str, payload: TimelineUpdate, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)
+    event_id: str, payload: TimelineUpdate, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)
 ):
     event = (
         db.query(TimelineEvent)
@@ -89,16 +97,17 @@ def update_event(
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(event, key, value)
+    event.updated_at = datetime.now(timezone.utc)
     index_timeline(db, event)
     account = _account(db, ctx, event.account_id)
     recompute_health(db, account)
     db.commit()
     db.refresh(event)
-    return as_dict(event)
+    return _serialize(event)
 
 
 @router.delete("/timeline/{event_id}", status_code=204)
-def delete_event(event_id: str, ctx: AuthContext = Depends(get_context), db: Session = Depends(get_db)) -> None:
+def delete_event(event_id: str, ctx: AuthContext = Depends(require_write), db: Session = Depends(get_db)) -> None:
     event = (
         db.query(TimelineEvent)
         .filter(TimelineEvent.id == event_id, TimelineEvent.org_id == ctx.organization.id)
@@ -108,5 +117,10 @@ def delete_event(event_id: str, ctx: AuthContext = Depends(get_context), db: Ses
         raise HTTPException(status_code=404, detail="Timeline entry not found")
     if event.event_type not in EDITABLE:
         raise HTTPException(status_code=400, detail="This entry is managed from its source record")
+    db.query(Chunk).filter(
+        Chunk.org_id == ctx.organization.id,
+        Chunk.source_type == "timeline",
+        Chunk.source_id == event.id,
+    ).delete()
     db.delete(event)
     db.commit()

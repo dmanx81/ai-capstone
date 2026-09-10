@@ -7,6 +7,9 @@ from app.database import get_db
 from app.models import OrgMember, Organization, User
 from app.security import decode_token, token_from_request
 
+WRITE_ROLES = {"owner", "admin", "member"}
+INVITE_ROLES = {"owner", "admin"}
+
 
 @dataclass
 class AuthContext:
@@ -16,12 +19,37 @@ class AuthContext:
     memberships: list[OrgMember]
 
 
+def _sync_user(db: Session, payload: dict) -> User | None:
+    user_id = payload.get("sub")
+    email = (payload.get("email") or "").lower() or None
+    if user_id:
+        user = db.get(User, user_id)
+        if user:
+            return user
+    if email:
+        user = db.query(User).filter(User.email == email).one_or_none()
+        if user:
+            return user
+    if user_id and email:
+        user = User(
+            id=user_id,
+            email=email,
+            full_name=payload.get("user_metadata", {}).get("full_name") or email.split("@")[0],
+            password_hash=None,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    return None
+
+
 def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:
     token = token_from_request(request)
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     payload = decode_token(token)
-    user = db.get(User, payload.get("sub"))
+    user = _sync_user(db, payload)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
@@ -52,6 +80,18 @@ def get_context(
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     return AuthContext(user=user, organization=org, role=member.role, memberships=memberships)
+
+
+def require_write(ctx: AuthContext = Depends(get_context)) -> AuthContext:
+    if ctx.role not in WRITE_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="This role is read-only")
+    return ctx
+
+
+def require_invite_admin(ctx: AuthContext = Depends(get_context)) -> AuthContext:
+    if ctx.role not in INVITE_ROLES:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only owners and admins can manage invitations")
+    return ctx
 
 
 def require_role(*roles: str):
