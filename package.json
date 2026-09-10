@@ -1,0 +1,13 @@
+{
+  "name": "relia",
+  "private": true,
+  "scripts": {
+    "dev:web": "pnpm --filter relia-web dev",
+    "dev:api": "cd apps/api && ../../.venv/bin/uvicorn app.main:app --reload --host 127.0.0.1 --port 43181",
+    "lint": "pnpm --filter relia-web lint",
+    "typecheck": "pnpm --filter relia-web typecheck",
+    "build": "pnpm --filter relia-web build",
+    "test": "cd apps/api && ../../.venv/bin/pytest -q"
+  },
+  "packageManager": "pnpm@10.33.3"
+}

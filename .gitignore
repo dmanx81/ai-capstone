@@ -1,0 +1,46 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next
+apps/web/.next/
+apps/web/out/
+apps/web/.vercel
+
+# python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+apps/api/.venv/
+dist/
+build/
+
+# local data
+data/
+*.db
+*.sqlite
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# misc
+.DS_Store
+*.pem
+.turbo
+coverage/
+.pnpm-debug.log*
+npm-debug.log*
+*.tsbuildinfo
+
+# ide
+.idea/
+.vscode/
