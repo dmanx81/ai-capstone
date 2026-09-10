@@ -22,9 +22,10 @@ Every business table has `org_id`. The session cookie identifies the user; `X-Or
 
 - **Account** is the customer relationship
 - **Contacts** are stakeholders on that account
-- **Timeline events** are the chronological system of record
+- **Timeline events** are the chronological system of record. User-entered types (meeting, email, call, note, customer request, product issue, renewal) can be created, edited, and deleted from the relationship page. System/AI-linked types are not silently editable.
 - **Risks / opportunities / commitments / tasks** are structured intelligence objects; creating them also appends a timeline entry
-- **Chunks** store embeddings for notes, CRM snapshots, timeline, documents, and intelligence objects
+- **Invitations** are org-scoped, hashed-token records. Role assignment is enforced on the API (`viewer` is read-only; only owner/admin can invite).
+- **Chunks** store embeddings for notes, CRM snapshots, timeline, documents, and intelligence objects. Re-index with `POST /accounts/{id}/reindex`. Duplicate source text is skipped by content hash; embedding failures keep the previous chunks.
 
 ## Health
 
@@ -42,9 +43,12 @@ Labels: healthy ≥ 75, watch ≥ 55, at_risk ≥ 35, else critical.
 `app/ai/embeddings.py` and `app/ai/llm.py` are provider protocols.
 
 - Embeddings: OpenAI `text-embedding-3-small` when keyed, otherwise a 1536-d hashing embedder
-- Generation: OpenAI or Anthropic JSON completions when keyed, otherwise a grounded assembler that only uses database records
-- `match_chunks` exists as SQL (pgvector cosine) and as a Python equivalent for SQLite
-- Answers always return evidence. Missing evidence produces an explicit “will not guess” response
+- Generation: OpenAI or Anthropic JSON completions when keyed, with timeout + retries; otherwise a grounded assembler that only uses database records
+- `match_chunks` exists as SQL (pgvector cosine) and as a Python equivalent for SQLite (hybrid cosine + lexical)
+- Answers always return evidence and source references. Missing evidence produces an explicit “will not guess” response
+- AI actions log `ai_usage_events` (model, latency, success)
+
+## Agent actions
 
 ## Agent actions
 
@@ -52,15 +56,15 @@ Labels: healthy ≥ 75, watch ≥ 55, at_risk ≥ 35, else critical.
 
 ## Billing
 
-Plans in `app/config.py` (`free`, `starter`, `growth`) gate account count and monthly AI actions. Stripe Checkout is used when `STRIPE_SECRET_KEY` is set; otherwise `/billing/demo-activate` updates the organization locally.
+Plans in `app/config.py` (`free`, `starter`, `growth`) gate account count and monthly AI actions. Stripe Checkout + Customer Portal are used when `STRIPE_SECRET_KEY` is set. Webhooks verify the Stripe signature and map **price IDs** to plans. The browser cannot set subscription state. Without keys, `/billing/demo-activate` updates the organization locally.
 
 ## Frontend routes
 
 | Path | Purpose |
 |------|---------|
 | `/` | Product landing |
-| `/login`, `/signup`, `/onboarding` | Auth |
-| `/dashboard` | Portfolio focus |
+| `/login`, `/signup`, `/onboarding`, `/invite/[token]` | Auth and invitations |
+| `/dashboard` | “What should I focus on today?” |
 | `/accounts`, `/accounts/new`, `/accounts/[id]` | CRM + timeline + intelligence |
 | `/tasks` | Cross-account next actions |
-| `/settings`, `/settings/billing` | Profile, members, plan |
+| `/settings`, `/settings/billing` | Profile, members, invitations, plan |

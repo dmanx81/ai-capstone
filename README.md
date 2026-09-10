@@ -21,8 +21,9 @@ The relationship (the **account**) is the system of record. The timeline, stakeh
 - **Auth:** HttpOnly session cookie issued by the API (local users table). Optional Supabase JWT verification when `SUPABASE_JWT_SECRET` is set
 - **AI:** Provider-neutral embeddings + LLM adapters. Without API keys, briefs and answers are assembled only from stored records
 - **Billing:** Stripe Checkout + webhooks when keys are present; otherwise a local demo upgrade
+- **Invites:** Owners/admins invite members; Resend when configured, otherwise a shareable link
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and the takeover audit in [docs/AUDIT.md](docs/AUDIT.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/DEPLOY.md](docs/DEPLOY.md), and the takeover audit in [docs/AUDIT.md](docs/AUDIT.md).
 
 ## Demo
 
@@ -87,13 +88,18 @@ Documented in `.env.example`. Secrets (`JWT_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`
 
 ## Production
 
-1. Provision a Supabase project. Run `supabase/migrations/*.sql` in order (includes `match_chunks` and RLS).
-2. Set `DATABASE_URL` to the Postgres connection string (SQLAlchemy form).
-3. Set `JWT_SECRET` or `SUPABASE_JWT_SECRET`, plus `FRONTEND_ORIGIN`.
+Follow [docs/DEPLOY.md](docs/DEPLOY.md). In short:
+
+1. Provision a Supabase project. Run `supabase/migrations/*.sql` in order (includes `match_chunks`, RLS, invitations).
+2. Set `DATABASE_URL` to the Postgres connection string (SQLAlchemy `postgresql+psycopg://` form).
+3. Set `JWT_SECRET` or `SUPABASE_JWT_SECRET`, plus `FRONTEND_ORIGIN`. Set `APP_ENV=production` so demo seed does not run.
 4. Host FastAPI (Fly, Render, Cloud Run, …) and point `API_INTERNAL_URL` at it for the Next.js server.
 5. Host the Next.js app (Vercel is supported for the frontend).
 6. Point Stripe webhooks at `https://<api-host>/api/v1/billing/webhook`.
 7. Optionally set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` for LLM-polished briefs. Retrieval still requires stored evidence.
+8. Optionally set `RESEND_API_KEY` so invitations are emailed.
+
+Do not put service-role, Stripe secret, or model keys in `NEXT_PUBLIC_*` variables.
 
 ## Security notes
 

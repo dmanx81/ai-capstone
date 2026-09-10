@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Building2, LayoutDashboard, ListChecks, LogOut, Menu, Settings2 } from "lucide-react";
 import { useState } from "react";
 
+import { NativeSelect } from "@/components/form";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
@@ -44,13 +45,20 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { session, logout } = useAuth();
+  const { session, logout, switchOrg } = useAuth();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
   async function onLogout() {
     await logout();
     router.replace("/login");
+  }
+
+  async function onSwitch(orgId: string) {
+    if (!orgId || orgId === session?.organization?.id) return;
+    await switchOrg(orgId);
+    router.replace("/dashboard");
+    router.refresh();
   }
 
   const sidebar = (
@@ -65,6 +73,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="text-xs text-muted-foreground">{session?.organization?.name}</div>
           </div>
         </Link>
+        {session?.memberships && session.memberships.length > 1 ? (
+          <div className="mt-3">
+            <NativeSelect
+              value={session.organization?.id ?? ""}
+              onChange={(e) => void onSwitch(e.target.value)}
+              aria-label="Workspace"
+            >
+              {session.memberships.map((membership) => (
+                <option key={membership.org_id} value={membership.org_id}>
+                  {membership.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        ) : null}
       </div>
       <div className="flex-1 px-2">
         <NavLinks onNavigate={() => setOpen(false)} />

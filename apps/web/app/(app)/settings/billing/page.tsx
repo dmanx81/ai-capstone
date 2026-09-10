@@ -92,6 +92,25 @@ export default function BillingPage() {
           </Card>
         ))}
       </div>
+      {billing?.stripe_enabled ? (
+        <Button
+          variant="outline"
+          onClick={async () => {
+            try {
+              const result = await apiPost<{ demo?: boolean; url?: string | null }>("/billing/portal");
+              if (result.url) {
+                window.location.assign(result.url);
+                return;
+              }
+              toast.message("Stripe portal is available after the first Checkout session.");
+            } catch (error) {
+              toast.error(error instanceof ApiError ? error.detail : "Unable to open billing portal");
+            }
+          }}
+        >
+          Open Stripe billing portal
+        </Button>
+      ) : null}
     </div>
   );
 }

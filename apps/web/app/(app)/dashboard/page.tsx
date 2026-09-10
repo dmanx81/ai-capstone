@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { EmptyState, ErrorState, PageHeader } from "@/components/empty-state";
-import { HealthBadge } from "@/components/status-badges";
+import { HealthBadge, Pill } from "@/components/status-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -46,11 +46,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-64" />
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-28" />
-          ))}
-        </div>
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
@@ -60,12 +56,38 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader title="Where should I focus today?" description={data.focus} />
+      <PageHeader title="What should I focus on today?" description={data.focus} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Today’s queue</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {data.today.length === 0 ? (
+            <EmptyState title="Nothing urgent" description="No overdue promises or at-risk accounts right now." />
+          ) : (
+            data.today.map((item, index) => (
+              <Link
+                key={`${item.kind}-${item.title}-${index}`}
+                href={`/accounts/${item.account_id}`}
+                className="flex items-start justify-between gap-3 rounded-lg border p-3 hover:bg-muted/40"
+              >
+                <div>
+                  <div className="font-medium">{item.title}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{item.detail}</div>
+                </div>
+                <Pill>{item.urgency}</Pill>
+              </Link>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat label="Portfolio ARR" value={money(data.summary.arr)} />
-        <Stat label="Accounts" value={String(data.summary.accounts)} />
         <Stat label="Needing attention" value={String(data.summary.at_risk)} />
         <Stat label="Overdue commitments" value={String(data.summary.overdue_commitments)} />
+        <Stat label="Open tasks" value={String(data.summary.open_tasks)} />
+        <Stat label="Portfolio ARR" value={money(data.summary.arr)} />
       </div>
 
       <Card>
@@ -140,7 +162,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Open opportunities</CardTitle>
+            <CardTitle>Expansion opportunities</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.opportunities.length === 0 ? (
@@ -163,7 +185,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming renewals and tasks</CardTitle>
+            <CardTitle>Upcoming tasks and renewals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {data.upcoming.renewals.map((account) => (
@@ -187,40 +209,25 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent intelligence</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.recent_intelligence.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Generate an account brief to see it here.</p>
-            ) : (
-              data.recent_intelligence.map((item) => (
-                <Link key={item.id} href={`/accounts/${item.account_id}`} className="block rounded-lg border p-3 hover:bg-muted/40">
-                  <div className="text-sm font-medium">{item.account_name}</div>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.summary}</p>
-                </Link>
-              ))
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent account activity</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {data.recent_activity.map((item) => (
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent customer changes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {data.recent_activity.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No recent timeline activity.</p>
+          ) : (
+            data.recent_activity.slice(0, 8).map((item) => (
               <Link key={item.id} href={`/accounts/${item.account_id}`} className="block rounded-lg border p-3 hover:bg-muted/40">
                 <div className="text-sm font-medium">{item.title}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
                   {item.account_name} · {item.event_type.replaceAll("_", " ")} · {fromNow(item.occurred_at)}
                 </div>
               </Link>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

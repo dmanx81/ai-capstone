@@ -11,8 +11,15 @@ type AuthState = {
   loading: boolean;
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<Session>;
-  register: (payload: { email: string; password: string; full_name: string; organization_name?: string }) => Promise<Session>;
+  register: (payload: {
+    email: string;
+    password: string;
+    full_name: string;
+    organization_name?: string;
+    invite_token?: string;
+  }) => Promise<Session>;
   logout: () => Promise<void>;
+  switchOrg: (orgId: string) => Promise<Session>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -54,6 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: async () => {
         await apiPost("/auth/logout");
         setSession(null);
+      },
+      switchOrg: async (orgId: string) => {
+        const data = await apiPost<Session>(`/auth/orgs/${orgId}/switch`);
+        setSession(data);
+        return data;
       },
     }),
     [session, loading, refresh],

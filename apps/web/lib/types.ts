@@ -78,12 +78,15 @@ export type TimelineEvent = {
   title: string;
   body: string | null;
   occurred_at: string;
+  created_at?: string;
+  updated_at?: string;
   contact_ids: string[];
   evidence_source: string | null;
   evidence_url: string | null;
   evidence_excerpt: string | null;
   source_object_type: string | null;
   source_object_id: string | null;
+  editable?: boolean;
 };
 
 export type Risk = {
@@ -229,6 +232,14 @@ export type Dashboard = {
     occurred_at: string;
   }[];
   focus: string;
+  today: {
+    kind: "account" | "commitment" | "risk" | "task" | "opportunity" | "change" | string;
+    urgency: "high" | "medium" | "low" | string;
+    title: string;
+    detail: string;
+    account_id: string;
+    account_name?: string | null;
+  }[];
 };
 
 export type BillingStatus = {
@@ -255,6 +266,25 @@ export type AskResponse = {
   }[];
   model: string;
   grounded: boolean;
+};
+
+export type Invitation = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expires_at: string;
+  last_sent_at?: string;
+  created_at: string;
+  invite_url?: string;
+  emailed?: boolean;
+};
+
+export type InvitePreview = {
+  email: string;
+  role: string;
+  organization: string | null;
+  expires_at: string;
 };
 
 export type AgentRun = {

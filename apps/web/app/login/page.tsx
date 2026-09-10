@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,11 @@ import { Field } from "@/components/form";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-export default function LoginPage() {
+function LoginForm() {
   const { login } = useAuth();
   const router = useRouter();
+  const search = useSearchParams();
+  const invite = search.get("invite");
   const [email, setEmail] = useState("demo@relia.app");
   const [password, setPassword] = useState("demo-password");
   const [pending, setPending] = useState(false);
@@ -24,6 +26,10 @@ export default function LoginPage() {
     try {
       const session = await login(email, password);
       toast.success("Signed in");
+      if (invite) {
+        router.replace(`/invite/${invite}` as "/invite/[token]");
+        return;
+      }
       router.replace(session.organization ? "/dashboard" : "/onboarding");
     } catch (error) {
       toast.error(error instanceof ApiError ? error.detail : "Unable to sign in");
@@ -56,5 +62,13 @@ export default function LoginPage() {
         </p>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
