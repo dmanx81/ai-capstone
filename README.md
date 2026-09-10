@@ -34,6 +34,8 @@ password: demo-password
 
 The demo workspace (Northstar Customer Success) is seeded with seven accounts, stakeholders, risks, opportunities, commitments, and a timeline.
 
+Public marketing pages: `/`, `/product`, `/use-cases`, `/pricing`, `/security`. App login is `/login`; new workspaces start at `/signup`.
+
 A second user `isolated@example.com` / `isolation-test` exists so organization isolation can be verified.
 
 ## Local development

@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { toast } from "sonner";
 
+import { Field } from "@/components/form";
+import { ReliaLogo } from "@/components/marketing/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Field } from "@/components/form";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -41,6 +42,7 @@ function LoginForm() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4 rounded-xl border bg-card p-6 shadow-sm">
+        <ReliaLogo />
         <div>
           <h1 className="text-xl font-semibold">Sign in to Relia</h1>
           <p className="mt-1 text-sm text-muted-foreground">Use the demo workspace or your own account.</p>
