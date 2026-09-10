@@ -145,7 +145,7 @@ export default function SettingsPage() {
                 ))}
               </ul>
             </div>
-            <Button variant="outline" render={<Link href="/settings/billing" />}>
+            <Button variant="outline" nativeButton={false} render={<Link href="/settings/billing" />}>
               Manage billing
             </Button>
           </CardContent>

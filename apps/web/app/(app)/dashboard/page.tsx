@@ -63,10 +63,10 @@ export default function DashboardPage() {
           <CardTitle>Today’s queue</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {data.today.length === 0 ? (
+          {(data.today ?? []).length === 0 ? (
             <EmptyState title="Nothing urgent" description="No overdue promises or at-risk accounts right now." />
           ) : (
-            data.today.map((item, index) => (
+            (data.today ?? []).map((item, index) => (
               <Link
                 key={`${item.kind}-${item.title}-${index}`}
                 href={`/accounts/${item.account_id}`}

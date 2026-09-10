@@ -81,7 +81,7 @@ export default function InviteAcceptPage() {
         <div className="w-full max-w-sm space-y-3 rounded-xl border bg-card p-6">
           <h1 className="text-xl font-semibold">Invitation unavailable</h1>
           <p className="text-sm text-muted-foreground">{error}</p>
-          <Button render={<Link href="/login" />} className="w-full">
+          <Button render={<Link href="/login" />} nativeButton={false} className="w-full">
             Sign in
           </Button>
         </div>

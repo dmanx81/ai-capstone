@@ -48,7 +48,7 @@ export default function AccountsPage() {
         title="Accounts"
         description="Every customer relationship in this workspace."
         actions={
-          <Button render={<Link href="/accounts/new" />}>New account</Button>
+          <Button render={<Link href="/accounts/new" />} nativeButton={false}>New account</Button>
         }
       />
       <div className="grid gap-3 sm:grid-cols-3">

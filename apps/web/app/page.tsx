@@ -21,10 +21,10 @@ export default function LandingPage() {
           Relia
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" render={<Link href="/login" />}>
+          <Button variant="ghost" nativeButton={false} render={<Link href="/login" />}>
             Sign in
           </Button>
-          <Button render={<Link href="/signup" />}>Start workspace</Button>
+          <Button nativeButton={false} render={<Link href="/signup" />}>Start workspace</Button>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 pb-20 pt-10">
@@ -37,10 +37,10 @@ export default function LandingPage() {
           CSMs, and account executives can see risks, promises, and next actions — with evidence, not guesses.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button size="lg" render={<Link href="/login" />}>
+          <Button size="lg" nativeButton={false} render={<Link href="/login" />}>
             Open demo workspace
           </Button>
-          <Button size="lg" variant="outline" render={<Link href="/signup" />}>
+          <Button size="lg" variant="outline" nativeButton={false} render={<Link href="/signup" />}>
             Create an account
           </Button>
         </div>

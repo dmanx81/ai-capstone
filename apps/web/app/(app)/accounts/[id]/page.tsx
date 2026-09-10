@@ -39,6 +39,11 @@ const AGENT_ACTIONS = [
   { id: "suggest_next_best_actions", label: "Suggest next best actions" },
 ];
 
+function isEditableEvent(event: TimelineEvent) {
+  if (typeof event.editable === "boolean") return event.editable;
+  return EVENT_TYPES.includes(event.event_type);
+}
+
 export default function AccountPage() {
   const params = useParams<{ id: string }>();
   const { session } = useAuth();
@@ -340,18 +345,18 @@ export default function AccountPage() {
                       </div>
                       <div className="font-medium">{event.title}</div>
                     </div>
-                    {canWrite && event.editable ? (
-                      <div className="flex gap-1">
-                        <Button size="xs" variant="ghost" onClick={() => setEditing(event)}>
+                    {canWrite && isEditableEvent(event) ? (
+                      <div className="flex shrink-0 gap-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => setEditing(event)}>
                           Edit
                         </Button>
-                        <Button size="xs" variant="ghost" onClick={() => setDeleting(event)}>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setDeleting(event)}>
                           Delete
                         </Button>
                       </div>
-                    ) : !event.editable ? (
+                    ) : isEditableEvent(event) ? null : (
                       <span className="text-xs text-muted-foreground">Managed from source</span>
-                    ) : null}
+                    )}
                   </div>
                   {event.body ? <p className="text-sm text-muted-foreground">{event.body}</p> : null}
                   {event.evidence_excerpt || event.evidence_source ? (
