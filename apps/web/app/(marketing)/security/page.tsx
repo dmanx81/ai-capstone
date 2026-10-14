@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { KeyRound, Lock, ScrollText, ShieldCheck } from "lucide-react";
 
+import { Container, PageIntro } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Security",
@@ -35,42 +35,41 @@ const ITEMS = [
 
 export default function SecurityPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-      <p className="text-sm font-medium text-muted-foreground">Security</p>
-      <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-        Isolation first. Evidence second. Secrets never in the browser.
-      </h1>
-      <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-        Relia is designed for customer teams that cannot mix workspaces or invent facts about an account. Authentication
-        uses an HttpOnly session cookie. Optional Supabase JWTs are verified on the API. This page does not claim SOC 2,
-        ISO 27001, HIPAA, or GDPR certification.
-      </p>
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
-        {ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Card key={item.title}>
-              <CardHeader>
-                <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
-                  <Icon className="size-4" />
-                </span>
-                <CardTitle className="mt-3">{item.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-6 text-muted-foreground">{item.body}</p>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      <div className="mt-10 flex flex-wrap gap-3">
-        <Button nativeButton={false} render={<Link href="/signup" />}>
-          Start workspace
-        </Button>
-        <Button variant="outline" nativeButton={false} render={<Link href="/login" />}>
-          Sign in
-        </Button>
-      </div>
-    </div>
+    <>
+      <PageIntro
+        eyebrow="Security"
+        title="Isolation first. Evidence second. Secrets never in the browser."
+        description="Relia is designed for customer teams that cannot mix workspaces or invent facts about an account. Authentication uses an HttpOnly session cookie. Optional Supabase JWTs are verified on the API. This page does not claim SOC 2, ISO 27001, HIPAA, or GDPR certification."
+      />
+      <section className="border-t">
+        <Container>
+          <dl>
+            {ITEMS.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className="grid gap-3 border-b py-10 lg:grid-cols-12 lg:gap-8">
+                  <dt className="lg:col-span-5">
+                    <div className="font-mono text-[11px] text-muted-foreground">{String(i + 1).padStart(2, "0")}</div>
+                    <div className="mt-3 flex items-center gap-3 text-xl font-semibold tracking-tight">
+                      <Icon className="size-4 text-muted-foreground" aria-hidden />
+                      {item.title}
+                    </div>
+                  </dt>
+                  <dd className="max-w-2xl text-[15px] leading-7 text-muted-foreground lg:col-span-7 lg:pt-7">{item.body}</dd>
+                </div>
+              );
+            })}
+          </dl>
+          <div className="flex flex-wrap gap-3 py-16">
+            <Button size="lg" className="h-11 px-5 text-[15px]" nativeButton={false} render={<Link href="/signup" />}>
+              Start workspace
+            </Button>
+            <Button size="lg" variant="outline" className="h-11 px-5 text-[15px]" nativeButton={false} render={<Link href="/login" />}>
+              Sign in
+            </Button>
+          </div>
+        </Container>
+      </section>
+    </>
   );
 }

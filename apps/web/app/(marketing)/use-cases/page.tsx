@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { CheckList, USE_CASES } from "@/components/marketing/sections";
+import { Container, PageIntro } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const metadata: Metadata = {
   title: "Use Cases",
@@ -37,42 +37,47 @@ const DETAIL: Record<string, string[]> = {
 
 export default function UseCasesPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-16">
-      <p className="text-sm font-medium text-muted-foreground">Use cases</p>
-      <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-        One relationship workspace for CS, AM, sales, and leaders.
-      </h1>
-      <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-        The account is shared. The questions are the same. Relia keeps the evidence in one place so teams stop
-        rebuilding context for every meeting.
-      </p>
-      <div className="mt-10 grid gap-4 md:grid-cols-2">
-        {USE_CASES.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Card key={item.title}>
-              <CardHeader>
-                <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <CardTitle className="mt-3">{item.title}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">{item.body}</p>
-                <CheckList items={DETAIL[item.title] ?? []} />
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-      <div className="mt-10 flex flex-wrap gap-3">
-        <Button nativeButton={false} render={<Link href="/signup" />}>
-          Start workspace
-        </Button>
-        <Button variant="outline" nativeButton={false} render={<Link href={{ pathname: "/", hash: "pricing" }} />}>
-          See pricing
-        </Button>
-      </div>
-    </div>
+    <>
+      <PageIntro
+        eyebrow="Use cases"
+        title="One relationship workspace for CS, AM, sales, and leaders."
+        description="The account is shared. The questions are the same. Relia keeps the evidence in one place so teams stop rebuilding context for every meeting."
+      />
+      <section className="border-t">
+        <Container>
+          {USE_CASES.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.title} className="grid gap-6 border-b py-12 lg:grid-cols-12 lg:gap-8">
+                <div className="lg:col-span-5">
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <h2 className="mt-6 text-2xl font-semibold tracking-tight">{item.title}</h2>
+                  <p className="mt-3 max-w-md text-[15px] leading-7 text-muted-foreground">{item.body}</p>
+                </div>
+                <div className="lg:col-span-7">
+                  <CheckList items={DETAIL[item.title] ?? []} />
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex flex-wrap gap-3 py-16">
+            <Button size="lg" className="h-11 px-5 text-[15px]" nativeButton={false} render={<Link href="/signup" />}>
+              Start workspace
+            </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="h-11 px-5 text-[15px]"
+              nativeButton={false}
+              render={<Link href={{ pathname: "/", hash: "pricing" }} />}
+            >
+              See pricing
+            </Button>
+          </div>
+        </Container>
+      </section>
+    </>
   );
 }

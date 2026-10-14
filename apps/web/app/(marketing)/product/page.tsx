@@ -8,6 +8,7 @@ import {
   PipelineSection,
   PreviewSection,
 } from "@/components/marketing/sections";
+import { PageIntro } from "@/components/marketing/section";
 import { Button } from "@/components/ui/button";
 
 export const metadata: Metadata = {
@@ -18,24 +19,18 @@ export const metadata: Metadata = {
 export default function ProductPage() {
   return (
     <>
-      <section className="mx-auto max-w-6xl px-4 pb-4 pt-12 sm:px-6 sm:pt-16">
-        <p className="text-sm font-medium text-muted-foreground">Product</p>
-        <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight sm:text-4xl">
-          Everything on the account, ready for the next conversation.
-        </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-          Relia is CRM-style relationship management with a chronological timeline, structured intelligence,
-          and AI that only uses stored evidence.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Button nativeButton={false} render={<Link href="/signup" />}>
-            Start workspace
-          </Button>
-          <Button variant="outline" nativeButton={false} render={<Link href="/login" />}>
-            Sign in
-          </Button>
-        </div>
-      </section>
+      <PageIntro
+        eyebrow="Product"
+        title="Everything on the account, ready for the next conversation."
+        description="Relia is CRM-style relationship management with a chronological timeline, structured intelligence, and AI that only uses stored evidence."
+      >
+        <Button size="lg" className="h-11 px-5 text-[15px]" nativeButton={false} render={<Link href="/signup" />}>
+          Start workspace
+        </Button>
+        <Button size="lg" variant="outline" className="h-11 px-5 text-[15px]" nativeButton={false} render={<Link href="/login" />}>
+          Sign in
+        </Button>
+      </PageIntro>
       <PipelineSection />
       <HowItWorksSection />
       <CapabilitiesSection />
