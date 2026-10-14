@@ -6,6 +6,7 @@ import { Building2, LayoutDashboard, ListChecks, LogOut, Menu, Settings2 } from 
 import { useState } from "react";
 
 import { NativeSelect } from "@/components/form";
+import { ReliaMark } from "@/components/marketing/logo";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/lib/auth";
@@ -65,9 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-full flex-col">
       <div className="px-3 py-4">
         <Link href="/dashboard" className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
-            R
-          </span>
+          <ReliaMark className="size-8" />
           <div>
             <div className="text-sm font-semibold">Relia</div>
             <div className="text-xs text-muted-foreground">{session?.organization?.name}</div>
