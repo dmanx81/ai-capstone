@@ -10,19 +10,19 @@ export const metadata: Metadata = {
 
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8">
-      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      <div className="mt-2 space-y-3 text-sm leading-6 text-muted-foreground">{children}</div>
+    <section className="mt-10 border-t pt-8">
+      <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+      <div className="mt-3 space-y-4 text-[15px] leading-7 text-muted-foreground">{children}</div>
     </section>
   );
 }
 
 export default function PrivacyPage() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16">
+    <div className="mx-auto max-w-3xl px-5 py-16 sm:px-8 sm:py-24">
       <LegalNote />
-      <h1 className="text-3xl font-semibold tracking-tight">Privacy</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Last updated 10 September 2026.</p>
+      <h1 className="text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">Privacy</h1>
+      <p className="mt-4 font-mono text-xs text-muted-foreground">Last updated 10 September 2026.</p>
 
       <Block title="What Relia stores">
         <p>
